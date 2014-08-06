@@ -14,16 +14,19 @@ python:
 
 before_install:
     - export DISPLAY=:99.0
+    - WHEEL_URL=https://nipy.bic.berkeley.edu/scipy_installers/travis
     - sh -e /etc/init.d/xvfb start
     - sudo apt-get update
     # matplotlib dependencies
     - sudo apt-get install libpng12-0 libfreetype6
     # scipy dependencies
     - sudo apt-get install libblas3gf liblapack3gf libatlas3gf-base libgfortran3
-    # pyqt dependencies
+    # pyside dependencies
     - sudo apt-get install libqtcore4 libqtwebkit4 libqtgui4 libqt4-svg
+    # Might be useful for pillow, needed for imread and / or pyfits
+    - sudo apt-get install libtiff4-dev libwebp-dev xcftools
     # pip build dependencies
-    - pip install -f https://nipy.bic.berkeley.edu/scipy_installers/travis cython six scipy
+    - pip install -f $WHEEL_URL cython six scipy
     - pip install coveralls pillow
     - python check_bento_build.py
 
@@ -41,11 +44,12 @@ script:
     - flake8 --exit-zero --exclude=test_*,six.py skimage doc/examples viewer_examples
 
     # Install optional dependencies to get full test coverage
-    # Notes:
-    # - pyfits and imread do NOT support py3.2
-    - pip install -f https://nipy.bic.berkeley.edu/scipy_installers/travis networkx nose matplotlib pyside
+    - pip install -f $WHEEL_URL networkx nose matplotlib pyside
+    # Postinstall for pyside
+    - curl -O $WHEEL_URL/pyside_postinstall.py
+    - python pyside_postinstall.py -install
+    # pyfits and imread do NOT support py3.2
     - if [ "$TRAVIS_PYTHON_VERSION" != "3.2" ]; then
-          sudo apt-get install -qq libtiff4-dev libwebp-dev xcftools;
           pip install -q imread pyfits;
       fi
     - sudo apt-get install -qq libfreeimage3
@@ -58,7 +62,7 @@ script:
     - mkdir -p $MPL_DIR
     - touch $MPL_DIR/matplotlibrc
     - "echo 'backend : Agg' > $MPL_DIR/matplotlibrc"
-    - "echo 'backend.qt4 : PyQt4' >> $MPL_DIR/matplotlibrc"
+    - "echo 'backend.qt4 : PySide' >> $MPL_DIR/matplotlibrc"
 
     # Run all doc examples
     - export PYTHONPATH=$(pwd):$PYTHONPATH
