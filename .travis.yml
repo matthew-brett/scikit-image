@@ -9,8 +9,8 @@ python:
     - 2.6
     - 2.7
     - 3.2
-      # - 3.3
-      # - 3.4
+    - 3.3
+    - 3.4
 
 before_install:
     - export DISPLAY=:99.0
@@ -27,7 +27,7 @@ before_install:
     - sudo apt-get install libtiff4-dev libwebp-dev xcftools
     # pip build dependencies
     - pip install -f $WHEEL_URL cython six scipy
-    - pip install coveralls pillow
+    - pip install coveralls pillow flake8
     - python check_bento_build.py
 
 install:
@@ -54,7 +54,7 @@ script:
       fi
     - sudo apt-get install -qq libfreeimage3
     # TODO: update when SimpleITK become available on py34 or hopefully pip
-    - if [[ $ENV != python=3.4* ]]; then
+    - if [ "$TRAVIS_PYTHON_VERSION" != "3.4" ]; then
         travis_retry easy_install -q SimpleITK;
       fi
     # Matplotlib settings
