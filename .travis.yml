@@ -71,7 +71,7 @@ script:
 
     # run tests again with optional dependencies to get more coverage
     # measure coverage on py3.3
-    - if [[ $ENV == python=3.3* ]]; then
+    - if [ "$TRAVIS_PYTHON_VERSION" == "3.3" ]; then
          nosetests --exe -v --with-doctest --with-cov --cover-package skimage;
       else
          nosetests --exe -v --with-doctest skimage;
