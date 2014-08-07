@@ -26,8 +26,8 @@ before_install:
     # Might be useful for pillow, needed for imread and / or pyfits
     - sudo apt-get install libtiff4-dev libwebp-dev xcftools
     # pip build dependencies
-    - pip install -f $WHEEL_URL cython six scipy pillow
-    - pip install coveralls flake8
+    - pip install -f $WHEEL_URL --no-index cython scipy pillow
+    - pip install coveralls flake8 six nose
     - python check_bento_build.py
 
 install:
@@ -44,7 +44,7 @@ script:
     - flake8 --exit-zero --exclude=test_*,six.py skimage doc/examples viewer_examples
 
     # Install optional dependencies to get full test coverage
-    - pip install -f $WHEEL_URL networkx nose matplotlib pyside
+    - pip install -f $WHEEL_URL --no-index networkx matplotlib pyside
     # Postinstall for pyside
     - curl -O $WHEEL_URL/pyside_postinstall.py
     - python pyside_postinstall.py -install
