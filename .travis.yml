@@ -14,7 +14,7 @@ python:
 
 before_install:
     - export DISPLAY=:99.0
-    - WHEEL_URL=https://nipy.bic.berkeley.edu/scipy_installers/travis
+    - WHEEL_URL=http://wheels.scikit-image.org
     - sh -e /etc/init.d/xvfb start
     - sudo apt-get update
     # matplotlib dependencies
@@ -26,8 +26,8 @@ before_install:
     # Might be useful for pillow, needed for imread and / or pyfits
     - sudo apt-get install libtiff4-dev libwebp-dev xcftools
     # pip build dependencies
-    - pip install -f $WHEEL_URL cython six scipy
-    - pip install coveralls pillow flake8
+    - pip install -f $WHEEL_URL cython six scipy pillow
+    - pip install coveralls flake8
     - python check_bento_build.py
 
 install:
