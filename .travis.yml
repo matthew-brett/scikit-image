@@ -14,7 +14,7 @@ python:
 
 before_install:
     - export DISPLAY=:99.0
-    - WHEEL_URL=http://wheels.scikit-image.org
+    - WHEEL_URL=https://8167b5c3a2af93a0a9fb-13c6eee0d707a05fa610c311eec04c66.ssl.cf2.rackcdn.com/
     - sh -e /etc/init.d/xvfb start
     - sudo apt-get update
     # matplotlib dependencies
