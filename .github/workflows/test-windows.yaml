@@ -62,6 +62,16 @@ jobs:
         run: |
           source .github/scripts/setup-build-env.sh
 
+      - name: Debug OpenBLAS
+        shell: bash
+        env:
+          OPENBLAS_VERBOSE: 2
+        run: |
+          echo "Numpy OpenBLAS"
+          python -c "import numpy"
+          echo "Scipy OpenBLAS"
+          python -c "import scipy"
+
       - name: Build and install from source
         shell: bash
         run: |
