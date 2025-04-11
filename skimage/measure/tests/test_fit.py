@@ -7,6 +7,7 @@ from skimage._shared.testing import (
     arch32,
     is_wasm,
     assert_almost_equal,
+    assert_array_equal,
     assert_array_less,
     assert_equal,
     xfail,
@@ -41,8 +42,8 @@ def test_line_model_nd_invalid_input():
     with testing.raises(ValueError):
         LineModelND().predict_y(np.zeros(1), np.zeros(1))
 
-    assert not LineModelND().estimate(np.empty((1, 3)))
-    assert not LineModelND().estimate(np.empty((1, 2)))
+    assert LineModelND.from_estimate(np.empty((1, 3))) is None
+    assert LineModelND.from_estimate(np.empty((1, 2))) is not None
 
     with testing.raises(ValueError):
         LineModelND().residuals(np.empty((1, 3)))
@@ -74,8 +75,7 @@ def test_line_model_nd_estimate():
     data = data0 + rng.normal(size=data0.shape)
 
     # estimate parameters of noisy data
-    model_est = LineModelND()
-    model_est.estimate(data)
+    model_est = LineModelND.from_estimate(data)
     # assert_almost_equal(model_est.residuals(data0), np.zeros(len(data)), 1)
 
     # test whether estimated parameters are correct
@@ -90,6 +90,12 @@ def test_line_model_nd_estimate():
     if np.linalg.norm(a) > 0:
         a /= np.linalg.norm(a)
     assert_almost_equal(np.linalg.norm(np.cross(model0.params[1], a)), 0, 1)
+
+    # With estimate method.
+    model2 = LineModelND()
+    with pytest.warns(FutureWarning, match='`estimate` is deprecated'):
+        assert model2.estimate(data)
+    assert_array_equal(model2.params, model_est.params)
 
 
 def test_line_model_nd_residuals():
@@ -106,7 +112,10 @@ def test_line_model_nd_residuals():
 
 def test_circle_model_invalid_input():
     with testing.raises(ValueError):
-        CircleModel().estimate(np.empty((5, 3)))
+        CircleModel.from_estimate(np.empty((5, 3)))
+    with testing.raises(ValueError):
+        with pytest.warns(FutureWarning, match='`estimate` is deprecated'):
+            CircleModel().estimate(np.empty((5, 3)))
 
 
 def test_circle_model_predict():
@@ -130,22 +139,31 @@ def test_circle_model_estimate():
     rng = np.random.default_rng(1234)
     data = data0 + rng.normal(size=data0.shape)
 
-    # estimate parameters of noisy data
-    model_est = CircleModel()
-    model_est.estimate(data)
+    # estimate parameters of noisy data (from_estimate method).
+    model_est = CircleModel.from_estimate(data)
 
     # test whether estimated parameters almost equal original parameters
     assert_almost_equal(model0.params, model_est.params, 0)
+
+    # estimate method.
+    model_est2 = CircleModel()
+    with pytest.warns(FutureWarning, match='`estimate` is deprecated'):
+        assert model_est2.estimate(data)
+    assert_array_equal(model_est2.params, model_est.params)
 
 
 def test_circle_model_int_overflow():
     xy = np.array([[1, 0], [0, 1], [-1, 0], [0, -1]], dtype=np.int32)
     xy += 500
 
-    model = CircleModel()
-    model.estimate(xy)
-
+    model = CircleModel.from_estimate(xy)
     assert_almost_equal(model.params, [500, 500, 1])
+
+    # estimate method.
+    model2 = CircleModel()
+    with pytest.warns(FutureWarning, match='`estimate` is deprecated'):
+        assert model2.estimate(xy)
+    assert_almost_equal(model2.params, [500, 500, 1])
 
 
 def test_circle_model_residuals():
@@ -157,20 +175,19 @@ def test_circle_model_residuals():
 
 
 def test_circle_model_insufficient_data():
-    model = CircleModel()
     warning_message = ["Input does not contain enough significant data points."]
     with expected_warnings(warning_message):
-        model.estimate(np.array([[1, 2], [3, 4]]))
+        CircleModel.from_estimate(np.array([[1, 2], [3, 4]]))
 
     with expected_warnings(warning_message):
-        model.estimate(np.array([[0, 0], [1, 1], [2, 2]]))
+        CircleModel.from_estimate(np.array([[0, 0], [1, 1], [2, 2]]))
 
     warning_message = (
         "Standard deviation of data is too small to estimate "
         "circle with meaningful precision."
     )
     with pytest.warns(RuntimeWarning, match=warning_message) as _warnings:
-        assert not model.estimate(np.ones((6, 2)))
+        assert CircleModel.from_estimate(np.ones((6, 2))) is None
     assert_stacklevel(_warnings)
     assert len(_warnings) == 1
 
@@ -531,6 +548,35 @@ def test_ransac_geometric():
     assert_almost_equal(model0.params, model_est.params)
     assert np.all(np.nonzero(inliers == False)[0] == outliers)
 
+    # Test that custom estimate class raises warning.
+
+    class C:
+        """Custom class"""
+
+        def __init__(self):
+            self._model = AffineTransform()
+
+        @property
+        def params(self):
+            return self._model.params
+
+        def estimate(self, src, dst):
+            self._model = AffineTransform.from_estimate(src, dst)
+            return self._model is not None
+
+        def residuals(self, src, dst):
+            return self._model.residuals(src, dst)
+
+    msg = (
+        "Passing custom classes without `from_estimate` deprecated "
+        "since version 0.26 and will be removed in version 2.2. "
+        "Add `from_estimate` method to custom class to avoid this warning."
+    )
+    with pytest.warns(FutureWarning, match=msg):
+        model_est, inliers = ransac((src, dst), C, 2, 20, rng=rng)
+
+    assert_almost_equal(model0.params, model_est.params)
+
 
 def test_ransac_is_data_valid():
     def is_data_valid(data):
@@ -714,3 +760,17 @@ def test_ransac_non_valid_best_model():
             rng=0,
             is_model_valid=is_model_valid,
         )
+
+
+@pytest.mark.parametrize('tf_class', (LineModelND, CircleModel, EllipseModel))
+def test_estimate_api(tf_class):
+    rng = np.random.default_rng()
+    data = rng.normal(100, 40, size=(10, 2))
+    assert tf_class.from_estimate(data)
+    tf = tf_class()
+    msg = (
+        f'`estimate` is deprecated since .* Please use `{tf_class.__name__}'
+        '.from_estimate` class constructor instead.'
+    )
+    with pytest.warns(FutureWarning, match=msg):
+        assert tf.estimate(data)

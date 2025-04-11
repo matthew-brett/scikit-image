@@ -1303,7 +1303,10 @@ def test_broadcasting():
 
 @pytest.mark.parametrize('tf_class', TRANSFORMS.values())
 def test_estimate_futurewarn(tf_class):
-    tf = tf_class.identity()
+    rng = np.random.default_rng()
+    data = rng.normal(100, 40, size=(10, 2))
+    assert tf_class.from_estimate(data)
+    tf = tf_class()
     msg = (
         f'`estimate` is deprecated since .* Please use `{tf_class.__name__}'
         '.from_estimate` class constructor instead.'
