@@ -82,6 +82,8 @@ def _calc_center_normalize(points, scaling='rms'):
     centered = points - centroid
     if scaling == 'rms':
         divisor = np.sqrt(np.mean(centered**2))
+    elif scaling == 'rms2':
+        divisor = np.sqrt(np.mean(centered**2)) / 2
     elif scaling == 'mrs':
         divisor = np.mean(np.sqrt(np.sum(centered**2, axis=1))) / np.sqrt(d)
     else:
