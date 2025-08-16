@@ -34,6 +34,7 @@ __all__ = [
     'enhance_contrast_percentile',
     'percentile',
     'pop_percentile',
+    'sum_percentile',
     'threshold_percentile',
 ]
 
