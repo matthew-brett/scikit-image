@@ -61,6 +61,7 @@ __all__ = [
     'autolevel',
     'equalize',
     'gradient',
+    'majority',
     'maximum',
     'mean',
     'geometric_mean',
@@ -74,6 +75,8 @@ __all__ = [
     'noise_filter',
     'entropy',
     'otsu',
+    'sum',
+    'windowed_histogram',
 ]
 
 
