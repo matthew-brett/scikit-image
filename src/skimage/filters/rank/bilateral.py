@@ -23,7 +23,11 @@ References
 
 """
 
-from ..._shared.utils import check_nD
+from functools import wraps
+import inspect
+import warnings
+
+from ..._shared.utils import check_nD, _warning_stacklevel
 from . import bilateral_cy
 from .generic import _preprocess_input
 
@@ -57,8 +61,49 @@ def _apply(func, image, footprint, out, mask, shift_x, shift_y, s0, s1, out_dtyp
     return out.reshape(out.shape[:2])
 
 
+def _proc_shifts(kwargs, stacklevel):
+    bad_kwds = {k: kwargs.pop(k, None) for k in ('shift_x', 'shift_y')}
+    if any(v is not None for v in bad_kwds.values()):
+        if 'shift' in kwargs:
+            raise ValueError('Cannot mix `shift` and either `shift_x` or `shift_y`')
+        warnings.warn(
+            '`shift_x` and `shift_y` are deprecated, use `shift` instead, '
+            'where the new argument can be constructed as `shift=(shift_y, '
+            'shift_x)`.*Note*: the `shift_y` value is first in the '
+            'tuple.',
+            FutureWarning,
+            stacklevel=stacklevel,
+        )
+    kwargs['shift'] = [bad_kwds[n] or 0 for n in ('shift_y', 'shift_x')]
+
+
+def shift_xy_to_shift(in_func):
+    out_params = list(inspect.signature(in_func).parameters)
+    assert out_params[4] == 'shift'
+    stacklevel = _warning_stacklevel(in_func)
+
+    @wraps(in_func)
+    def out_func(*args, **kwargs):
+        if len(args) > 2:
+            warnings.warn(
+                f'All *positional* arguments to `{in_func.__name__}` after '
+                '`footprint` are deprecated from version 1.0 and will be '
+                'keyword-only from version 2.2.',
+                FutureWarning,
+                stacklevel=stacklevel,
+            )
+        for i, arg in enumerate(args):
+            kwargs[out_params[i]] = arg
+        _proc_shifts(kwargs, stacklevel)
+        return in_func(**kwargs)
+
+    return out_func
+
+
+# Intermediate option
+@shift_xy_to_shift
 def mean_bilateral(
-    image, footprint, out=None, mask=None, shift_x=0, shift_y=0, s0=10, s1=10
+    image, footprint, out=None, mask=None, *, shift=(0, 0), s0=10, s1=10
 ):
     """Apply a flat kernel bilateral filter.
 
@@ -85,9 +130,11 @@ def mean_bilateral(
     mask : ndarray
         Mask array that defines (>0) area of the image included in the local
         neighborhood. If None, the complete image is used (default).
-    shift_x, shift_y : int
-        Offset added to the footprint center point. Shift is bounded to the
-        footprint sizes (center must be inside the given footprint).
+    shift : sequence of int
+        Offset added to the `footprint` center point, where first value in
+        sequence is offset on first axis of `footprint` array, and second is
+        offset on second. Shift is bounded to the footprint sizes (center must
+        be inside the given footprint).
     s0, s1 : int
         Define the [s0, s1] interval around the grayvalue of the center pixel
         to be considered for computing the value.
@@ -111,15 +158,14 @@ def mean_bilateral(
     >>> bilat_img = mean_bilateral(img, disk(20), s0=10,s1=10)
 
     """
-
     return _apply(
         bilateral_cy._mean,
         image,
         footprint,
         out=out,
         mask=mask,
-        shift_x=shift_x,
-        shift_y=shift_y,
+        shift_x=shift[1],
+        shift_y=shift[0],
         s0=s0,
         s1=s1,
     )
