@@ -61,22 +61,55 @@ def _apply(func, image, footprint, out, mask, shift_x, shift_y, s0, s1, out_dtyp
     return out.reshape(out.shape[:2])
 
 
+# Deprecation start and stop for shift_{x,y} and positional after `footprint`.
+_SHIFT_X_DEP_START = '1.0'
+_SHIFT_X_DEP_STOP = '2.2'
+
+
 def _proc_shifts(kwargs, stacklevel):
     bad_kwds = {k: kwargs.pop(k, None) for k in ('shift_x', 'shift_y')}
-    if any(v is not None for v in bad_kwds.values()):
-        if 'shift' in kwargs:
-            raise ValueError('Cannot mix `shift` and either `shift_x` or `shift_y`')
-        warnings.warn(
-            '`shift_x` and `shift_y` are deprecated, use `shift` instead, '
-            'where the new argument can be constructed as `shift=(shift_y, '
-            'shift_x)`.*Note*: the `shift_y` value is first in the '
-            'tuple.',
-            FutureWarning,
-            stacklevel=stacklevel,
-        )
+    if not any(v is not None for v in bad_kwds.values()):
+        return
+    if 'shift' in kwargs:
+        raise ValueError('Cannot mix `shift` and either `shift_x` or `shift_y`')
+    warnings.warn(
+        '`shift_x` and `shift_y` are deprecated since version '
+        f'{_SHIFT_X_DEP_START}, and will be removed in version '
+        f'{_SHIFT_X_DEP_STOP}; use `shift` instead, where the new argument'
+        'can be constructed as `shift=(shift_y, shift_x)`. '
+        '*Note*: the `shift_y` value is first in the tuple.',
+        FutureWarning,
+        stacklevel=stacklevel,
+    )
     kwargs['shift'] = [bad_kwds[n] or 0 for n in ('shift_y', 'shift_x')]
 
 
+SK2_TO_1_ATTR = '__sk2_to_1__'
+
+
+def label_2to1(dec):
+    """Label wrapping decorator as being 2 to 1 converter."""
+
+    def labeled_dec(func):
+        out_func = dec(func)
+        setattr(out_func, SK2_TO_1_ATTR, True)
+        return out_func
+
+    return labeled_dec
+
+
+def is_2to1(func):
+    """True if this function is a 2 to 1 wrapper."""
+    return getattr(func, SK2_TO_1_ATTR, False)
+
+
+def unwrap_2to1(func):
+    if hasattr(func, '__wrapped__') and is_2to1(func):
+        return func.__wrapped__
+    return func
+
+
+@label_2to1
 def shift_xy_to_shift(in_func):
     out_params = list(inspect.signature(in_func).parameters)
     assert out_params[4] == 'shift'
@@ -87,8 +120,9 @@ def shift_xy_to_shift(in_func):
         if len(args) > 2:
             warnings.warn(
                 f'All *positional* arguments to `{in_func.__name__}` after '
-                '`footprint` are deprecated from version 1.0 and will be '
-                'keyword-only from version 2.2.',
+                '`footprint` are deprecated since version '
+                f'{_SHIFT_X_DEP_START} and will be keyword-only from version '
+                f'{_SHIFT_X_DEP_STOP}.',
                 FutureWarning,
                 stacklevel=stacklevel,
             )
@@ -100,10 +134,17 @@ def shift_xy_to_shift(in_func):
     return out_func
 
 
-# Intermediate option
 @shift_xy_to_shift
 def mean_bilateral(
-    image, footprint, out=None, mask=None, *, shift=(0, 0), s0=10, s1=10
+    image,
+    footprint,
+    out=None,
+    mask=None,
+    *,
+    shift=(0, 0),
+    s0=10,
+    s1=10,
+    # image, footprint, out=None, mask=None, shift_x=0, shift_y=0, s0=10, s1=10
 ):
     """Apply a flat kernel bilateral filter.
 
@@ -158,6 +199,7 @@ def mean_bilateral(
     >>> bilat_img = mean_bilateral(img, disk(20), s0=10,s1=10)
 
     """
+    print('Shift', shift)
     return _apply(
         bilateral_cy._mean,
         image,
