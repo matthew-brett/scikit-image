@@ -9,8 +9,6 @@ Summary of findings on **ij** (Numpy) vs **xy** (imaging) coordinate usage acros
 
 **References:** [Issue #7728](https://github.com/scikit-image/scikit-image/issues/7728) (ij in `skimage.transform`), [Issue #2275](https://github.com/scikit-image/scikit-image/issues/2275) (xy/rc conversion), [User guide — Coordinate conventions](https://scikit-image.org/docs/stable/user_guide/numpy_images.html#coordinate-conventions).
 
----
-
 ## 1. Warping and geometric transforms
 
 ### 1.1 `warp` and `_warp_fast` (Cython)
@@ -31,8 +29,6 @@ for tfr in range(out_r):
 - So output coordinates passed to the transform are **(x, y) = (column, row)**. The transform returns source `(c, r)` (col, row), and the image is sampled at `img[r, c]` (row, col). The _meaning_ of coordinates in the transform chain is xy.
 
 **Callers:** `rotate`, `swirl`, `radon`, `warp_polar`, geometric transforms used as `inverse_map`. Examples: [`doc/examples/transform/plot_geometric.py`](https://github.com/scikit-image/scikit-image/blob/main/doc/examples/transform/plot_geometric.py) uses `warp` with `SimilarityTransform`; [`tests/.../test_warps.py`](https://github.com/scikit-image/scikit-image/blob/main/tests/skimage/transform/test_warps.py) uses `warp` with `AffineTransform` / `ProjectiveTransform`.
-
----
 
 ### 1.2 `warp_coords`
 
@@ -62,8 +58,6 @@ def shift_up10_left20(xy):
 
 **Code:** [`src/skimage/transform/_warps.py`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/_warps.py) — `warp_coords`, and the `warp` branch that uses it (e.g. when `inverse_map` is a callable).
 
----
-
 ### 1.3 `rotate`
 
 **Convention: xy**
@@ -92,8 +86,6 @@ minc, minr = corners[:, 0].min(), corners[:, 1].min()
 
 **Code:** [`src/skimage/transform/_warps.py`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/_warps.py) — `rotate`.
 
----
-
 ### 1.4 `swirl`
 
 **Convention: xy**
@@ -103,8 +95,6 @@ minc, minr = corners[:, 0].min(), corners[:, 1].min()
 - Docstring: `center` is “(column, row) tuple”. Default uses `image.shape[:2][::-1]` (cols, rows).
 
 **Code:** [`src/skimage/transform/_warps.py`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/_warps.py) — `swirl`.
-
----
 
 ### 1.5 `_linear_polar_mapping` / `_log_polar_mapping` (used by `warp_polar`)
 
@@ -116,8 +106,6 @@ minc, minr = corners[:, 0].min(), corners[:, 1].min()
 - Implementation uses `center[0]` for radial offset in the first axis and `center[1]` for the second, consistent with (row, col) for center.
 
 **Code:** [`src/skimage/transform/_warps.py`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/_warps.py) — `_linear_polar_mapping`, `_log_polar_mapping`.
-
----
 
 ### 1.6 Geometric transform classes (`ProjectiveTransform`, `AffineTransform`, `SimilarityTransform`, etc.)
 
@@ -132,8 +120,6 @@ minc, minr = corners[:, 0].min(), corners[:, 1].min()
 
 **Code:** [`src/skimage/transform/_geometric.py`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/_geometric.py).
 
----
-
 ## 2. Hough transforms
 
 ### 2.1 `hough_line`
@@ -146,8 +132,6 @@ minc, minr = corners[:, 0].min(), corners[:, 1].min()
 - Cython `_hough_line`: `y_idxs, x_idxs = np.nonzero(img)`, so **x = col, y = row**. Distance uses `ctheta[j] * x + stheta[j] * y` (standard Hough (x,y) form). Image indexing is `img[row, col]` elsewhere.
 
 **Code:** [`hough_transform.py`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/hough_transform.py), [`_hough_transform.pyx`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/_hough_transform.pyx).
-
----
 
 ### 2.2 `hough_line_peaks`
 
@@ -166,8 +150,6 @@ img[rr, cc] = 1
 
 **Code:** [`hough_transform.py`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/hough_transform.py).
 
----
-
 ### 2.3 `probabilistic_hough_line`
 
 **Convention: xy**
@@ -180,8 +162,6 @@ img[rr, cc] = 1
 
 **Code:** [`hough_transform.py`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/hough_transform.py), [`_hough_transform.pyx`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/_hough_transform.pyx).
 
----
-
 ### 2.4 `hough_circle`
 
 **Convention: ij**
@@ -192,8 +172,6 @@ img[rr, cc] = 1
 - Cython uses `x, y = np.nonzero(img)` but assigns **rows to `x` and cols to `y`** (names reversed). Accumulator is `(radii, rows, cols)` and indexed as `acc[i, tx, ty]` with `tx, ty` derived from row/col. The **effective** convention for the public API is ij.
 
 **Code:** [`hough_transform.py`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/hough_transform.py), [`_hough_transform.pyx`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/_hough_transform.pyx).
-
----
 
 ### 2.5 `hough_circle_peaks`
 
@@ -210,8 +188,6 @@ img[rr, cc] = 1
 
 **Code:** [`hough_transform.py`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/hough_transform.py); [`feature/peak.py`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/feature/peak.py) — `_prominent_peaks`.
 
----
-
 ### 2.6 `hough_ellipse`
 
 **Convention: xy**
@@ -223,8 +199,6 @@ img[rr, cc] = 1
 - Ellipse example uses `yc, xc` from the result.
 
 **Code:** [`hough_transform.py`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/hough_transform.py), [`_hough_transform.pyx`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/_hough_transform.pyx).
-
----
 
 ## 3. Radon transform
 
@@ -239,8 +213,6 @@ img[rr, cc] = 1
 
 **Code:** [`radon_transform.py`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/radon_transform.py).
 
----
-
 ### 3.2 `_radon_transform` Cython (bilinear ray sum)
 
 **Convention: xy-style (x,y) mapped to image[i,j]**
@@ -250,8 +222,6 @@ img[rr, cc] = 1
 - Comment “(s, t) is the (x, y) system rotated by theta”; `index_i = x + rotation_center`, `index_j = y + rotation_center`; `image[i, j]` with i = first axis, j = second. So (x,y) → (row, col) in typical usage.
 
 **Code:** [`_radon_transform.pyx`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/_radon_transform.pyx).
-
----
 
 ## 4. Resize, rescale, downscale, integral
 
@@ -265,8 +235,6 @@ img[rr, cc] = 1
 
 **Code:** [`_warps.py`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/_warps.py), etc.
 
----
-
 ### 4.2 `integral_image`, `integrate`
 
 **Convention: ij**
@@ -278,15 +246,11 @@ img[rr, cc] = 1
 
 **Code:** [`integral.py`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/transform/integral.py).
 
----
-
 ## 5. Pyramids, finite Radon, thin-plate splines
 
 - **Pyramids** (`pyramid_*`): operate on arrays only; no explicit coordinate convention.
 - **`frt2` / `ifrt2`**: finite Radon; similar to radon, image axes are ij.
 - **`ThinPlateSplineTransform`**: used with `from_estimate(src, dst)` and `warp`; **src/dst** are typically in the same (x, y) style as other geometric transforms (xy).
-
----
 
 ## 6. Supporting code outside `transform`
 
@@ -300,8 +264,6 @@ img[rr, cc] = 1
 
 **Code:** [`draw/draw.py`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/draw/draw.py).
 
----
-
 ### 6.2 `skimage.feature.corner_subpix`
 
 **Convention: ij**
@@ -312,8 +274,6 @@ img[rr, cc] = 1
 
 **Code:** [`feature/corner.py`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/feature/corner.py).
 
----
-
 ### 6.3 `skimage.feature._prominent_peaks`
 
 **Convention: xy**
@@ -323,8 +283,6 @@ img[rr, cc] = 1
 - Returns “intensity, xcoords, ycoords” with **x = axis 1 (col), y = axis 0 (row)**. Used by `hough_line_peaks` and `hough_circle_peaks`.
 
 **Code:** [`feature/peak.py`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/feature/peak.py).
-
----
 
 ## 7. Summary table
 
@@ -348,15 +306,11 @@ img[rr, cc] = 1
 | `corner_subpix`               | ij         | (row, col)                               |
 | `_prominent_peaks`            | xy         | x=col, y=row                             |
 
----
-
 ## 8. Recommendations for issue #7728
 
 1. **Add an explicit coordinate/convention flag** (e.g. `coordinates='xy'|'ij'`) to warps, `rotate`, `swirl`, `warp_polar`, and geometric transforms, as in #7728.
 2. **Unify Hough API:** e.g. have `hough_circle` and `hough_circle_peaks` use the same convention (preferably ij to match `draw` and NumPy), and fix the `hough_line_peaks` example (`img[cc, rr]`).
 3. **Clarify docstrings** wherever “x”/“y” or “row”/“col” are used, and point to the user guide’s coordinate conventions.
 4. **Consider the conversion helpers** from #2275 (e.g. xy ↔ rc) to support interoperability with OpenCV and other libraries.
-
----
 
 _Generated from the `cursor-coordinate-review` branch of scikit-image. Base links target the default branch on GitHub._
