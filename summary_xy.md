@@ -12,6 +12,7 @@ Based on investigation of the scikit-image codebase, here is a comprehensive sum
 | **skimage.transform** (geometric transforms)                | **XY**            | Math uses x, y; coords are (x, y) pairs                              |
 | **skimage.transform.rotate**                                | **XY for center** | Explicitly notes "(cols, rows), contrary to normal skimage ordering" |
 | **skimage.transform.hough_ellipse**                         | **MIXED/BUGGY**   | Returns (yc, xc) but examples use `img[cc, rr]`                      |
+| **skimage.filters.rank** (shift_x, shift_y params)          | **XY**            | `shift_x` shifts columns (j), `shift_y` shifts rows (i)              |
 
 ## Critical Findings
 
@@ -124,12 +125,31 @@ DST = np.array([
 ])  # Clearly (x, y) pairs forming a rectangle
 ```
 
+### skimage.filters.rank — XY Convention (for shift parameters)
+
+The rank filters accept `shift_x` and `shift_y` parameters that offset the footprint center. These use XY convention where x=horizontal (column) and y=vertical (row).
+
+**Implementation from [`src/skimage/filters/rank/core_cy.pyx:68-69`](https://github.com/scikit-image/scikit-image/blob/main/src/skimage/filters/rank/core_cy.pyx#L68-L69)**:
+
+```cython
+cdef Py_ssize_t centre_r = <Py_ssize_t>(footprint.shape[0] / 2) + shift_y
+cdef Py_ssize_t centre_c = <Py_ssize_t>(footprint.shape[1] / 2) + shift_x
+```
+
+This shows:
+
+- `shift_x` is added to `centre_c` (column = second axis = j direction)
+- `shift_y` is added to `centre_r` (row = first axis = i direction)
+
+The parameter names follow XY convention where x is horizontal and y is vertical, opposite to the IJ convention used elsewhere in the codebase.
+
 ## Conclusion
 
 The codebase has a **fundamental split**:
 
 1. **skimage.draw, skimage.feature, skimage.measure** — consistently use **IJ (row, col)** convention
 2. **skimage.transform geometric transforms** — use **XY** convention for coordinate pairs
-3. **skimage.transform hough functions** — **inconsistent/buggy**, mixing conventions even within single examples
+3. **skimage.filters.rank shift parameters** — use **XY** convention (`shift_x`=column, `shift_y`=row)
+4. **skimage.transform hough functions** — **inconsistent/buggy**, mixing conventions even within single examples
 
 The explicit acknowledgment in `rotate()` that its center parameter is "(cols, rows), contrary to normal skimage ordering" confirms the developers are aware of this inconsistency. The GitHub issue [#7728](https://github.com/scikit-image/scikit-image/issues/7728) aims to address this by adding a `coordinates` parameter across `skimage.transform`.
