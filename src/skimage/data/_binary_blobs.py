@@ -2,9 +2,32 @@ import warnings
 
 import skimage2 as ski2
 
-from ..util import PendingSkimage2Change
+from .._shared.utils import skimage2_migration
 
 
+@skimage2_migration("""
+## Summary
+This function is replaced by `skimage2.data.binary_blobs` with a new signature.
+The optional parameters `length` and `n_dim` are replaced with a new required parameter `shape`, which allows generating non-square outputs.
+Optional parameter `blob_size_fraction` is replaced with required parameter `blob_size`, whose behavior is independent of the output image size.
+The default value of `boundary_mode` is changed from `'nearest'` to `'wrap'`.
+
+## Examples
+To keep the old (`skimage`, v1.x) behavior, use
+
+```python
+import skimage2 as ski2
+
+ski2.data.binary_blobs(
+    shape=(length,) * n_dim,
+    blob_size=blob_size_fraction * length,
+    boundary_mode='nearest',
+)
+```
+
+with `length`, `n_dim`, and `blob_size_fraction` containing values used with the old signature.
+Other parameters -- including `boundary_mode` if you already set it explicitly -- can be left unchanged.
+""")
 def binary_blobs(
     length=512,
     blob_size_fraction=0.1,
@@ -68,24 +91,6 @@ def binary_blobs(
     >>> # Blobs cover a smaller volume fraction of the image
     >>> blobs = data.binary_blobs(length=256, volume_fraction=0.3)
     """
-    warnings.warn(
-        "`skimage.data.binary_blobs` is deprecated in favor of "
-        "`skimage2.data.binary_blobs` which has a new signature. "
-        "Parameters `length` and `n_dim` have been replaced with `shape`. "
-        "`blob_size_fraction` has been changed to `blob_size`. "
-        "The default of `boundary_mode` has been changed to 'wrap'. "
-        "To keep the old (`skimage`, v1.x) behavior, use:\n"
-        "\n"
-        "    import skimage2 as ski2\n"
-        "    ski2.data.binary_blobs(\n"
-        "        shape=(length,) * n_dim,\n"
-        "        blob_size=blob_size_fraction * length,\n"
-        "        boundary_mode='nearest',\n"
-        "        ...\n"
-        "    )",
-        stacklevel=2,
-        category=PendingSkimage2Change,
-    )
     blob_size = blob_size_fraction * length
     return ski2.data.binary_blobs(
         shape=(length,) * n_dim,

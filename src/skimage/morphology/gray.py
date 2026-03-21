@@ -24,15 +24,29 @@ _SUPPORTED_MODES = {
 }
 
 
-_PENDING_SKIMAGE2_MESSAGE = """\
-`skimage.morphology.{name}` is deprecated in favor of
-`skimage2.morphology.{name}`, which changes the default value
-for parameter `mode` from 'reflect' to 'ignore'.
+from .._shared.utils import skimage2_migration
 
-To keep the old (`skimage`, v1.x) behavior, set that parameter explicitly.
+
+_SKIMAGE2_MORPH_MIGRATION = """
+## Summary
+Functions `skimage.morphology.{name}` are replaced by
+`skimage2.morphology.{name}`.
+The new functions use 'ignore' as the default value for parameter `mode` (as
+opposed to 'reflect' in v1.x).
+
+## Examples
+To keep the old (`skimage`, v1.x) behavior, set this parameter explicitly:
+
+```python
+# Skimage1 default:
+ski.morphology.{name}(image, footprint, mode='reflect')
+# Skimage2 equivalent (must specify mode):
+ski2.morphology.{name}(image, footprint, mode='reflect')
+```
 """
 
 
+@skimage2_migration(_SKIMAGE2_MORPH_MIGRATION.format(name='erosion'))
 @default_footprint
 def erosion(
     image,

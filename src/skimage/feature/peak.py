@@ -10,6 +10,33 @@ from .._shared._warnings import warn_external
 import skimage2 as ski2
 
 
+from .._shared.utils import skimage2_migration
+
+
+@skimage2_migration("""
+## Summary
+This function is replaced by `skimage2.feature.peak_local_max` with new behavior:
+
+- Parameter `p_norm` defaults to 2 (Euclidean distance), was `numpy.inf` (Chebyshev distance)
+- Parameter `exclude_border` defaults to 1, was `True`
+- Parameter `exclude_border` no longer accepts `False` and `True`, pass 0 instead of `False`, or `min_distance` instead of `True`
+- Parameters after `image` are keyword-only
+
+## Examples
+To keep the old behavior when switching to `skimage2`, update your call according to the following cases:
+
+- `exclude_border` not passed (default): Assign it the same value as `min_distance` (default `1`).
+- `exclude_border=True`: Same as above.
+- `exclude_border=False`: Use `exclude_border=0`.
+- `p_norm` not passed (default): Pass `p_norm=numpy.inf` explicitly.
+
+```python
+# Skimage1 style:
+ski.feature.peak_local_max(image)
+# Skimage2 equivalent:
+ski2.feature.peak_local_max(image, exclude_border=1, p_norm=np.inf)
+```
+""")
 def peak_local_max(
     image,
     min_distance=1,
@@ -134,33 +161,6 @@ def peak_local_max(
            [15, 15, 15]])
 
     """
-    warn_external(
-        dedent("""\
-        `skimage.feature.peak_local_max` is deprecated in favor of
-        `skimage2.feature.peak_local_max` with new behavior:
-
-        * Parameter `p_norm` defaults to 2 (Euclidean distance),
-          was `numpy.inf` (Chebyshev distance)
-        * Parameter `exclude_border` defaults to 1, was `True`
-        * Parameter `exclude_border` no longer accepts `False` and `True`,
-          pass 0 instead of `False`, or `min_distance` instead of `True`
-        * Parameters after `image` are keyword-only
-
-        To keep the old behavior when switching to `skimage2`, update your call
-        according to the following cases:
-
-        * `exclude_border` not passed, use `exclude_border=<value_of_min_distance>`
-        * `exclude_border=True`, same as above
-        * `exclude_border=False`, use `exclude_border=0`
-        * `exclude_border=<int>`, no change necessary
-        * `p_norm` not passed, use `p_norm=numpy.inf`
-        * `p_norm=<float>, no change necessary
-
-        Other keyword parameters can be left unchanged.
-        """),
-        category=PendingSkimage2Change,
-    )
-
     # Deprecate passing `np.inf` to `num_peaks` and `num_peaks_per_label`
     if num_peaks is not None and np.isinf(num_peaks):
         num_peaks = None
