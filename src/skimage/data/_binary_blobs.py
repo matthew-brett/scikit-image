@@ -1,5 +1,3 @@
-import warnings
-
 import skimage2 as ski2
 
 from .._shared.utils import skimage2_migration

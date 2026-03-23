@@ -40,6 +40,7 @@ python_sources = [
   'coord.py',
   'dtype.py',
   'filters.py',
+  'migration.py',
   'tester.py',
   'testing.py',
   'utils.py',

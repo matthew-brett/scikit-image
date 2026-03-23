@@ -3,10 +3,10 @@ Grayscale morphological operations
 """
 
 from .misc import default_footprint
-from ..util import PendingSkimage2Change
-from .._shared._warnings import warn_external
 
 import skimage2 as ski2
+
+from .._shared.utils import skimage2_migration
 
 
 __all__ = ['erosion', 'dilation', 'opening', 'closing', 'white_tophat', 'black_tophat']
@@ -24,17 +24,16 @@ _SUPPORTED_MODES = {
 }
 
 
-from .._shared.utils import skimage2_migration
-
-
 _SKIMAGE2_MORPH_MIGRATION = """
 ## Summary
+
 Functions `skimage.morphology.{name}` are replaced by
 `skimage2.morphology.{name}`.
 The new functions use 'ignore' as the default value for parameter `mode` (as
 opposed to 'reflect' in v1.x).
 
 ## Examples
+
 To keep the old (`skimage`, v1.x) behavior, set this parameter explicitly:
 
 ```python
@@ -132,16 +131,13 @@ def erosion(
            [0, 0, 0, 0, 0]], dtype=uint8)
 
     """
-    warn_external(
-        _PENDING_SKIMAGE2_MESSAGE.format(name=erosion.__name__),
-        category=PendingSkimage2Change,
-    )
     out = ski2.morphology.erosion(
         image, footprint=footprint, out=out, mode=mode, cval=cval
     )
     return out
 
 
+@skimage2_migration(_SKIMAGE2_MORPH_MIGRATION.format(name='dilation'))
 @default_footprint
 def dilation(
     image,
@@ -228,16 +224,13 @@ def dilation(
            [0, 0, 0, 0, 0]], dtype=uint8)
 
     """
-    warn_external(
-        _PENDING_SKIMAGE2_MESSAGE.format(name=dilation.__name__),
-        category=PendingSkimage2Change,
-    )
     out = ski2.morphology.dilation(
         image, footprint=footprint, out=out, mode=mode, cval=cval
     )
     return out
 
 
+@skimage2_migration(_SKIMAGE2_MORPH_MIGRATION.format(name='opening'))
 @default_footprint
 def opening(image, footprint=None, out=None, *, mode="reflect", cval=0.0):
     """Return grayscale morphological opening of an image.
@@ -309,16 +302,13 @@ def opening(image, footprint=None, out=None, *, mode="reflect", cval=0.0):
            [0, 0, 0, 0, 0]], dtype=uint8)
 
     """
-    warn_external(
-        _PENDING_SKIMAGE2_MESSAGE.format(name=opening.__name__),
-        category=PendingSkimage2Change,
-    )
     out = ski2.morphology.opening(
         image, footprint=footprint, out=out, mode=mode, cval=cval
     )
     return out
 
 
+@skimage2_migration(_SKIMAGE2_MORPH_MIGRATION.format(name='closing'))
 @default_footprint
 def closing(image, footprint=None, out=None, *, mode="reflect", cval=0.0):
     """Return grayscale morphological closing of an image.
@@ -390,16 +380,13 @@ def closing(image, footprint=None, out=None, *, mode="reflect", cval=0.0):
            [0, 0, 0, 0, 0]], dtype=uint8)
 
     """
-    warn_external(
-        _PENDING_SKIMAGE2_MESSAGE.format(name=closing.__name__),
-        category=PendingSkimage2Change,
-    )
     out = ski2.morphology.closing(
         image, footprint=footprint, out=out, mode=mode, cval=cval
     )
     return out
 
 
+@skimage2_migration(_SKIMAGE2_MORPH_MIGRATION.format(name='white_tophat'))
 @default_footprint
 def white_tophat(image, footprint=None, out=None, *, mode="reflect", cval=0.0):
     """Return white top hat of an image.
@@ -475,16 +462,13 @@ def white_tophat(image, footprint=None, out=None, *, mode="reflect", cval=0.0):
            [0, 0, 0, 0, 0]], dtype=uint8)
 
     """
-    warn_external(
-        _PENDING_SKIMAGE2_MESSAGE.format(name=white_tophat.__name__),
-        category=PendingSkimage2Change,
-    )
     out = ski2.morphology.white_tophat(
         image, footprint=footprint, out=out, mode=mode, cval=cval
     )
     return out
 
 
+@skimage2_migration(_SKIMAGE2_MORPH_MIGRATION.format(name='black_tophat'))
 @default_footprint
 def black_tophat(image, footprint=None, out=None, *, mode="reflect", cval=0.0):
     """Return black top hat of an image.
@@ -561,10 +545,6 @@ def black_tophat(image, footprint=None, out=None, *, mode="reflect", cval=0.0):
            [0, 0, 0, 0, 0]], dtype=uint8)
 
     """
-    warn_external(
-        _PENDING_SKIMAGE2_MESSAGE.format(name=black_tophat.__name__),
-        category=PendingSkimage2Change,
-    )
     out = ski2.morphology.black_tophat(
         image, footprint=footprint, out=out, mode=mode, cval=cval
     )

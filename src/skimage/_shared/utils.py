@@ -8,9 +8,6 @@ import numpy as np
 
 from ._warnings import all_warnings, warn, warn_external
 
-
-from .migration import skimage2_migration
-
 __all__ = [
     'deprecate_func',
     'get_bound_method_class',
@@ -24,7 +21,6 @@ __all__ = [
     'slice_at_axis',
     "deprecate_parameter",
     "DEPRECATED",
-    "skimage2_migration",
 ]
 
 
