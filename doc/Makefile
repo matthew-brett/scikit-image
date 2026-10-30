@@ -14,6 +14,10 @@ ALLSPHINXOPTS   = -d $(SPHINXCACHE) $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) source
 DEST            = build
 
 MIGRATION_TPL = source/user_guide/skimage2_migration.rst.tpl
+MIGRATION_RST = $(MIGRATION_TPL:.tpl=)
+
+# Sources generated before Sphinx runs. Every builder reads them.
+GENERATED = migration-doc api
 
 .PHONY: all help clean api migration-doc migration-test html api dirhtml pickle json htmlhelp qthelp devhelp latex latexpdf changes linkcheck doctest gitwash
 
@@ -41,7 +45,8 @@ help:
 clean:
 	-rm -rf $(DEST)
 	-rm -rf api
-	-rm -rf source/api
+	-rm -rf source/api source/api2
+	-rm -f $(MIGRATION_RST)
 	-find ./source/auto_examples/* -type f | grep -v blank | xargs -r rm -f
 
 api:
@@ -59,33 +64,33 @@ migration-test:
 	$(PYTHON) tools/run_migration_doctests.py
 	@echo "done."
 
-html: migration-doc api
+html: $(GENERATED)
 	$(SPHINXBUILD) -b html $(ALLSPHINXOPTS) $(DEST)/html
 	@echo
 	@echo "Build finished. The HTML pages are in build/html."
 
-dirhtml:
+dirhtml: $(GENERATED)
 	$(SPHINXBUILD) -b dirhtml $(ALLSPHINXOPTS) $(DEST)/dirhtml
 	@echo
 	@echo "Build finished. The HTML pages are in build/dirhtml."
 
-pickle:
+pickle: $(GENERATED)
 	$(SPHINXBUILD) -b pickle $(ALLSPHINXOPTS) $(DEST)/pickle
 	@echo
 	@echo "Build finished; now you can process the pickle files."
 
-json:
+json: $(GENERATED)
 	$(SPHINXBUILD) -b json $(ALLSPHINXOPTS) $(DEST)/json
 	@echo
 	@echo "Build finished; now you can process the JSON files."
 
-htmlhelp:
+htmlhelp: $(GENERATED)
 	$(SPHINXBUILD) -b htmlhelp $(ALLSPHINXOPTS) $(DEST)/htmlhelp
 	@echo
 	@echo "Build finished; now you can run HTML Help Workshop with the" \
 	      ".hhp project file in build/htmlhelp."
 
-qthelp:
+qthelp: $(GENERATED)
 	$(SPHINXBUILD) -b qthelp $(ALLSPHINXOPTS) $(DEST)/qthelp
 	@echo
 	@echo "Build finished; now you can run "qcollectiongenerator" with the" \
@@ -94,7 +99,7 @@ qthelp:
 	@echo "To view the help file:"
 	@echo "# assistant -collectionFile build/qthelp/scikitimage.qhc"
 
-devhelp:
+devhelp: $(GENERATED)
 	$(SPHINXBUILD) -b devhelp $(ALLSPHINXOPTS) $(DEST)/devhelp
 	@echo
 	@echo "Build finished."
@@ -103,7 +108,7 @@ devhelp:
 	@echo "# ln -s build/devhelp $$HOME/.local/share/devhelp/scikitimage"
 	@echo "# devhelp"
 
-latex: api
+latex: $(GENERATED)
 	$(SPHINXBUILD) -b latex $(ALLSPHINXOPTS) $(DEST)/latex
 	@echo
 	@echo "Build finished; the LaTeX files are in $(DEST)/latex."
@@ -116,18 +121,18 @@ latexpdf: latex
 	make -C build/latex all-pdf
 	@echo "pdflatex finished; the PDF files are in build/latex."
 
-changes:
+changes: $(GENERATED)
 	$(SPHINXBUILD) -b changes $(ALLSPHINXOPTS) $(DEST)/changes
 	@echo
 	@echo "The overview file is in build/changes."
 
-linkcheck:
+linkcheck: $(GENERATED)
 	$(SPHINXBUILD) -b linkcheck $(ALLSPHINXOPTS) $(DEST)/linkcheck
 	@echo
 	@echo "Link check complete; look for any errors in the above output " \
 	      "or in build/linkcheck/output.txt."
 
-doctest:
+doctest: $(GENERATED)
 	$(SPHINXBUILD) -b doctest $(ALLSPHINXOPTS) $(DEST)/doctest
 	@echo "Testing of doctests in the sources finished, look at the " \
 	      "results in build/doctest/output.txt."
