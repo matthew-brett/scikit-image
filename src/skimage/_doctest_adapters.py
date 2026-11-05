@@ -162,6 +162,23 @@ def _is_from_shim(obj, shim_module: str):
     return getattr(obj, '__module__', None) == shim_module
 
 
+def shim_wraps(wrapped):
+    """Like :func:`functools.wraps`, but keeps the enclosing module for ``__module__``.
+
+    Use for shim wrappers around ``_skimage2`` functions: the wrapper inherits
+    the wrapped function's name, docstring, annotations and ``__wrapped__``
+    chain, but advertises itself as living in the shim module where it is
+    defined.
+    """
+
+    def decorator(wrapper):
+        functools.update_wrapper(wrapper, wrapped)
+        wrapper.__module__ = wrapper.__globals__['__name__']
+        return wrapper
+
+    return decorator
+
+
 def _adapt_obj_doctest(obj, shim_module: str):
     """Return a shim-local view with adapted doctest examples, as necessary
 

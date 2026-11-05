@@ -1,3 +1,4 @@
+import inspect
 import sys
 import types
 import typing
@@ -8,6 +9,7 @@ from skimage._doctest_adapters import (
     _adapt_doctest_doc,
     _adapt_obj_doctest,
     adapt_doctests,
+    shim_wraps,
 )
 
 import pytest
@@ -386,6 +388,48 @@ def test_adapt_obj_doctest_leaves_shim_local_class_unchanged():
     AlreadyShimmed.__module__ = 'skimage.tests.example'
     out = _adapt_obj_doctest(AlreadyShimmed, shim_module='skimage.tests.example')
     assert out is AlreadyShimmed
+
+
+def test_shim_wraps():
+    """shim_wraps copies wrapper metadata but keeps the enclosing __module__."""
+
+    def impl(a, b=1):
+        """Implementation docstring."""
+        return a + b
+
+    impl.__module__ = '_skimage2.tests.example'
+
+    @shim_wraps(impl)
+    def wrapper(*args, **kwargs):
+        return impl(*args, **kwargs)
+
+    assert wrapper.__module__ == __name__
+    assert wrapper.__name__ == impl.__name__
+    assert wrapper.__qualname__ == impl.__qualname__
+    assert wrapper.__doc__ == impl.__doc__
+    assert wrapper.__annotations__ == impl.__annotations__
+    assert wrapper.__wrapped__ is impl
+    assert wrapper(1, b=2) == 3
+    assert str(inspect.signature(wrapper)) == str(inspect.signature(impl))
+
+
+def test_shim_wraps_keeps_module_for_closures():
+    """A wrapper defined inside a function still keeps the module __name__."""
+
+    def impl():
+        """Implementation docstring."""
+        return 1
+
+    impl.__module__ = '_skimage2.tests.example'
+
+    def make():
+        @shim_wraps(impl)
+        def wrapper():
+            return impl()
+
+        return wrapper
+
+    assert make().__module__ == __name__
 
 
 def test_adapt_doctests_wraps_class_without_mutating_impl_add():

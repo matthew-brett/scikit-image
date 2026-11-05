@@ -1,5 +1,3 @@
-import functools
-
 from _skimage2.measure._regionprops import (
     regionprops as regionprops,
     euler_number as euler_number,
@@ -28,12 +26,12 @@ from _skimage2.measure._regionprops import (  # noqa: F401
     RegionProperties,
 )
 
-from skimage._doctest_adapters import adapt_doctests
+from skimage._doctest_adapters import adapt_doctests, shim_wraps
 
 adapt_doctests(globals())
 
 
-@functools.wraps(regionprops)
+@shim_wraps(regionprops)
 def regionprops(
     label_image,
     intensity_image=None,

@@ -1,5 +1,3 @@
-import functools
-
 from _skimage2.transform._geometric import (
     AffineTransform as AffineTransform,
     EssentialMatrixTransform as EssentialMatrixTransform,
@@ -26,7 +24,7 @@ from _skimage2.transform._geometric import (  # noqa: F401
 )
 
 
-from skimage._doctest_adapters import adapt_doctests
+from skimage._doctest_adapters import adapt_doctests, shim_wraps
 
 adapt_doctests(globals())
 
@@ -58,7 +56,7 @@ TRANSFORMS = {k: globals()[v.__name__] for k, v in _SKI2_TRANSFORMS.items()}
 PiecewiseAffineTransform._affine_class = AffineTransform
 
 
-@functools.wraps(estimate_transform)
+@shim_wraps(estimate_transform)
 def estimate_transform(ttype, src, dst, *args, **kwargs):
     return _estimate_transform(TRANSFORMS, ttype, src, dst, *args, **kwargs)
 
