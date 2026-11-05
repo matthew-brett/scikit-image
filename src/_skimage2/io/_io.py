@@ -3,7 +3,8 @@ import warnings
 
 import numpy as np
 
-from _skimage2._shared.utils import warn, deprecate_parameter, DEPRECATED
+from _skimage2._shared.utils import deprecate_parameter, DEPRECATED
+from _skimage2._shared._warnings import warn_external
 from ..exposure import is_low_contrast
 from ..color.colorconv import rgb2gray, rgba2rgb
 from ..io.manage_plugins import call_plugin, _hide_plugin_deprecation_warnings
@@ -188,15 +189,14 @@ def imsave(fname, arr, plugin=DEPRECATED, *, check_contrast=True, **plugin_args)
         if fname.lower().endswith(('.tiff', '.tif')):
             plugin = 'tifffile'
     if arr.dtype == bool:
-        warn(
+        warn_external(
             f'{fname} is a boolean image: setting True to 255 and False to 0. '
             'To silence this warning, please convert the image using '
-            'img_as_ubyte.',
-            stacklevel=4,
+            'img_as_ubyte.'
         )
         arr = arr.astype('uint8') * 255
     if check_contrast and is_low_contrast(arr):
-        warn(f'{fname} is a low contrast image', stacklevel=3)
+        warn_external(f'{fname} is a low contrast image')
 
     with _hide_plugin_deprecation_warnings():
         return call_plugin('imsave', fname, arr, plugin=plugin, **plugin_args)
