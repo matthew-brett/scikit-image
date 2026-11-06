@@ -14,6 +14,7 @@ from _skimage2.transform._geometric import (
 
 from _skimage2.transform._geometric import (  # noqa: F401
     _GeometricTransform,
+    _HMatrixTransform,
     _affine_matrix_from_vector,
     _append_homogeneous_dim,
     _apply_homogeneous,
