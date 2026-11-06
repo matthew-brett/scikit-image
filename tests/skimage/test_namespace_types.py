@@ -192,24 +192,26 @@ def _impl_class(cls):
 
 
 def test_v1_classes_are_v1():
-    # Exceptions stay shared, so that v1 code can catch them from v2 code.
-    v2 = [
-        name
-        for name, cls in _v1_classes().items()
-        if cls.__module__.split('.')[0] != 'skimage'
-        and not issubclass(cls, BaseException)
-    ]
+    v2 = []  # Classes in v1 that are actually v2.
+    for name, cls in _v1_classes().items():
+        if cls.__module__.split('.')[0] == 'skimage':
+            continue  # cls already v1
+        # Exceptions stay shared, so that v1 code can catch them from v2 code.
+        if not issubclass(cls, BaseException):
+            v2.append(name)
     assert v2 == []
 
 
 def test_v1_classes_keep_v2_hierarchy():
     classes = _v1_classes()
-    lost = [
-        f'{a} -> {b}'
-        for a, cls_a in classes.items()
-        for b, cls_b in classes.items()
-        if cls_a is not cls_b
-        and issubclass(_impl_class(cls_a), _impl_class(cls_b))
-        and not issubclass(cls_a, cls_b)
-    ]
+    lost = []  # Classes that are subclasses in v2, but not v1.
+    for a, cls_a in classes.items():
+        for b, cls_b in classes.items():
+            if cls_a is cls_b:
+                continue
+            if not issubclass(_impl_class(cls_a), _impl_class(cls_b)):
+                continue  # Not subclass in v2 namespace.
+            if not issubclass(cls_a, cls_b):
+                # Subclass in v2 namespace, but not in v1 namespace.
+                lost.append(f'{a} -> {b}')
     assert lost == []
