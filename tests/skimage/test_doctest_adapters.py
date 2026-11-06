@@ -9,6 +9,8 @@ from skimage._doctest_adapters import (
     _adapt_doctest_doc,
     _adapt_obj_doctest,
     adapt_doctests,
+    as_shim,
+    returns_shim,
     shim_wraps,
 )
 
@@ -430,6 +432,69 @@ def test_shim_wraps_keeps_module_for_closures():
         return wrapper
 
     assert make().__module__ == __name__
+
+
+def test_as_shim():
+    class Impl:
+        pass
+
+    ns = {'Impl': Impl, '__name__': 'skimage.tests.example_as_shim'}
+    adapt_doctests(ns)
+    obj = Impl()
+    assert as_shim(obj) is obj
+    assert type(obj) is ns['Impl']
+    items = as_shim([Impl(), Impl()])
+    assert [type(item) for item in items] == [ns['Impl']] * 2
+    other = object()
+    assert as_shim(other) is other
+
+
+def test_as_shim_refuses_shim_init():
+    class Impl:
+        pass
+
+    ns = {'Impl': Impl, '__name__': 'skimage.tests.example_shim_init'}
+    adapt_doctests(ns)
+
+    def __init__(self):
+        self.extra = 1
+
+    ns['Impl'].__init__ = __init__
+    with pytest.raises(TypeError, match='must not define __init__'):
+        as_shim(Impl())
+
+
+def test_as_shim_allows_doctest_copy_of_init():
+    class Impl:
+        def __init__(self):
+            """Example.
+
+            >>> import _skimage2 as ski2
+            """
+            self.value = 1
+
+    ns = {'Impl': Impl, '__name__': 'skimage.tests.example_init_copy'}
+    adapt_doctests(ns)
+    assert '__init__' in vars(ns['Impl'])  # Copy with adapted docstring.
+    assert type(as_shim(Impl())) is ns['Impl']
+
+
+def test_returns_shim():
+    class Impl:
+        pass
+
+    def make():
+        """Implementation docstring."""
+        return Impl()
+
+    make.__module__ = '_skimage2.tests.example'
+    ns = {'Impl': Impl, '__name__': 'skimage.tests.example_returns_shim'}
+    adapt_doctests(ns)
+    wrapper = returns_shim(make)
+    assert type(wrapper()) is ns['Impl']
+    assert wrapper.__module__ == __name__
+    assert wrapper.__doc__ == make.__doc__
+    assert wrapper.__wrapped__ is make
 
 
 def test_adapt_doctests_wraps_class_without_mutating_impl_add():

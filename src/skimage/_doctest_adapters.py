@@ -24,6 +24,7 @@ from __future__ import annotations
 import functools
 import inspect
 import re
+import sys
 import types
 import typing
 from collections.abc import Mapping
@@ -177,6 +178,50 @@ def shim_wraps(wrapped):
         return wrapper
 
     return decorator
+
+
+@functools.cache
+def _check_no_instance_state(shim_class, impl_class):
+    """Raise TypeError if `shim_class` builds instances unlike `impl_class`.
+
+    Python refuses ``__class__`` changes between incompatible layouts; this
+    also refuses shim ``__init__`` or ``__new__`` with code of their own.
+    Doctest copies of these methods share the code of the original.
+    """
+    for name in ('__init__', '__new__'):
+        shim_code = getattr(getattr(shim_class, name), '__code__', None)
+        if shim_code is not getattr(getattr(impl_class, name), '__code__', None):
+            raise TypeError(f'Shim class {shim_class} must not define {name}')
+
+
+def as_shim(obj):
+    """Return `obj`, or each item of list `obj`, as an instance of its shim class.
+
+    Objects of classes without a shim class pass through unchanged.  Changing
+    ``__class__`` is safe because shim classes add no instance state.
+    """
+    if isinstance(obj, list):
+        return [as_shim(item) for item in obj]
+    impl_class = type(obj)
+    shim_class = _SHIM_CLASSES.get(impl_class)
+    if shim_class is not None:
+        _check_no_instance_state(shim_class, impl_class)
+        obj.__class__ = shim_class
+    return obj
+
+
+def returns_shim(func):
+    """Wrap ``_skimage2`` function `func` so that it returns shim-class objects.
+
+    The wrapper has the ``__module__`` of the calling shim module.
+    """
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        return as_shim(func(*args, **kwargs))
+
+    wrapper.__module__ = sys._getframe(1).f_globals['__name__']
+    return wrapper
 
 
 def _adapt_obj_doctest(obj, shim_module: str):
