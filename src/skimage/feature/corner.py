@@ -157,8 +157,12 @@ and it has no ``order`` parameter.
 ``method='finite-difference'`` replaces ``use_gaussian_derivatives=False``,
 including a call that left the argument at its default.
 
+``method='dct'`` is the Fourier Hessian under half-sample reflection. Below
+``sigma`` of 0.8 it is that multiplier; at and above 0.8 it uses the
+moment-corrected kernels. It requires ``mode='reflect'``.
+
 ``%(qname_new)s`` returns the ``order='rc'`` element list. ``order='xy'``
-is that list reversed, for either method:
+is that list reversed, for every method:
 
 >>> import numpy as np
 >>> import skimage as ski1

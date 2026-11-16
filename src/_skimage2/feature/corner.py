@@ -209,6 +209,57 @@ def _hessian_matrix_with_gaussian(image, sigma=1, mode='reflect', cval=0):
     return H_elems
 
 
+# Below this sigma the sampled second derivative still carries a Nyquist
+# residual, so method='dct' uses the Fourier multiplier. At and above it the
+# moment-corrected kernel matches that multiplier in the bulk of an image,
+# and a step of 0.02 in sigma across the boundary is no larger than the
+# kernel's own step.
+_DCT_CROSSOVER = 0.8
+
+
+def _sigma_needs_dct(sigma):
+    """True when any axis is below the kernel/Fourier crossover."""
+    if np.isscalar(sigma):
+        return float(sigma) < _DCT_CROSSOVER
+    return any(float(value) < _DCT_CROSSOVER for value in sigma)
+
+
+def _dct_hessian(image, sigma):
+    """Hessian of the half-sample-even continuous Gaussian.
+
+    Type-II DCT Gaussian of Rey-Otero and Delbracio, then the second
+    derivatives of that field: multiply each coefficient by ``-omega_i
+    omega_j`` and invert. The extension repeats the edge sample, which is
+    ``mode='reflect'``. ``image`` is already floating point. ``sigma`` is a
+    scalar or one value per axis.
+    """
+    ndim = image.ndim
+    if np.isscalar(sigma):
+        sigma = (float(sigma),) * ndim
+    else:
+        sigma = tuple(float(value) for value in sigma)
+
+    ext = image
+    for axis, length in enumerate(image.shape):
+        index = np.minimum(
+            np.arange(2 * length), 2 * length - 1 - np.arange(2 * length)
+        )
+        ext = np.take(ext, index, axis=axis)
+
+    freqs = [np.fft.fftfreq(length) * (2 * np.pi) for length in ext.shape]
+    grids = np.meshgrid(*freqs, indexing='ij')
+    damp = np.exp(
+        -0.5 * sum(sigma[axis] ** 2 * grids[axis] ** 2 for axis in range(ndim))
+    )
+    spectrum = np.fft.fftn(ext) * damp
+    crop = tuple(slice(0, length) for length in image.shape)
+    elements = []
+    for ax0, ax1 in combinations_with_replacement(range(ndim), 2):
+        field = np.fft.ifftn(spectrum * (-grids[ax0] * grids[ax1])).real
+        elements.append(field[crop].astype(image.dtype, copy=False))
+    return elements
+
+
 def _hessian_matrix_finite_difference(image, sigma=1, mode='constant', cval=0):
     """Hessian elements by finite differences of a Gaussian-smoothed image.
 
@@ -250,12 +301,16 @@ def hessian_matrix(
     cval : float, optional
         Used in conjunction with mode 'constant', the value outside
         the image boundaries.
-    method : {'gaussian-derivative', 'finite-difference'}, optional
+    method : {'gaussian-derivative', 'finite-difference', 'dct'}, optional
         ``'gaussian-derivative'`` convolves once per element with a
         moment-corrected sampled Gaussian derivative. ``'finite-difference'``
-        smooths the image, then takes finite differences. The element list is
-        in ``rc`` order either way; the old ``order='xy'`` list is this list
-        reversed.
+        smooths the image, then takes finite differences. ``'dct'`` is the
+        continuous Gaussian under half-sample reflection. Below ``sigma`` of
+        0.8 it is a Fourier multiplier. At and above 0.8, where a sampled
+        kernel matches that multiplier in the bulk of an image, it uses the
+        moment-corrected kernels. It requires ``mode='reflect'``. The element
+        list is in ``rc`` order for every method; the old ``order='xy'`` list
+        is this list reversed.
 
     Returns
     -------
@@ -278,7 +333,11 @@ def hessian_matrix(
     With ``method='gaussian-derivative'``, each element is one separable
     convolution, so every axis is extended over the border exactly once.
     With ``method='finite-difference'``, the derivatives are finite
-    differences of the smoothed image.
+    differences of the smoothed image. With ``method='dct'``, the boundary is
+    half-sample reflection. Below ``sigma`` of 0.8 the derivatives are the
+    Fourier multiplier of that interpolant. At and above 0.8 the
+    moment-corrected kernels match that multiplier in the bulk, and
+    ``'dct'`` uses them, so a sweep in ``sigma`` does not step at the change.
 
     .. versionchanged:: 2.0
         ``use_gaussian_derivatives`` is ``method``, and ``'gaussian-derivative'``
@@ -308,8 +367,19 @@ def hessian_matrix(
         return _hessian_matrix_finite_difference(
             image, sigma=sigma, mode=mode, cval=cval
         )
+    if method == 'dct':
+        if mode != 'reflect':
+            raise ValueError(
+                "method='dct' uses half-sample reflection; pass mode='reflect'."
+            )
+        if _sigma_needs_dct(sigma):
+            return _dct_hessian(image, sigma)
+        return _hessian_matrix_with_gaussian(
+            image, sigma=sigma, mode='reflect', cval=cval
+        )
     raise ValueError(
-        f"method must be 'gaussian-derivative' or 'finite-difference'; got {method!r}"
+        "method must be 'gaussian-derivative', 'finite-difference', or 'dct'; "
+        f'got {method!r}'
     )
 
 

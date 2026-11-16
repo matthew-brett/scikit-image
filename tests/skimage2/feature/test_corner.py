@@ -29,6 +29,7 @@ from _skimage2.feature import (
     structure_tensor,
     structure_tensor_eigenvalues,
 )
+from _skimage2.feature.corner import _dct_hessian
 from _skimage2.morphology import footprint_rectangle, octagon
 
 
@@ -355,6 +356,125 @@ def test_hessian_gaussian_order_is_a_reversal(sigma):
     tol = 1e-12 * max(np.abs(h).max() for h in rc)
     for got, expected in zip(transposed, (Hcc.T, Hrc.T, Hrr.T)):
         assert_allclose(got, expected, atol=tol, rtol=0)
+
+
+def _rel_peak(got, expected):
+    scale = max(np.max(np.abs(element)) for element in expected)
+    return max(np.max(np.abs(a - b)) for a, b in zip(got, expected)) / scale
+
+
+def test_dct_hessian_matches_a_band_limited_closed_form():
+    """A DCT-II basis is exactly the model the Fourier Hessian assumes."""
+    n = 48
+    k, ell = np.indices((n, n), dtype=float)
+    m, p, sigma = 20, 14, 0.5
+    a, b = np.pi * m / n, np.pi * p / n
+    ca, cb = np.cos(a * (k + 0.5)), np.cos(b * (ell + 0.5))
+    image = ca * cb
+    damp = np.exp(-0.5 * sigma**2 * (a**2 + b**2))
+    truth = [
+        -a * a * damp * image,
+        a * b * damp * np.sin(a * (k + 0.5)) * np.sin(b * (ell + 0.5)),
+        -b * b * damp * image,
+    ]
+    got = hessian_matrix(image, sigma=sigma, mode='reflect', method='dct')
+    assert _rel_peak(got, truth) < 1e-10
+
+
+def test_dct_hessian_uses_kernels_once_they_agree():
+    """At and above sigma 0.8, method='dct' is the reflect-mode kernel."""
+    image = np.random.default_rng(0).random((32, 32))
+    for sigma in (0.8, 1.0, (0.8, 2.0)):
+        dct = hessian_matrix(image, sigma=sigma, mode='reflect', method='dct')
+        kernels = hessian_matrix(
+            image, sigma=sigma, mode='reflect', method='gaussian-derivative'
+        )
+        for got, expected in zip(dct, kernels):
+            assert_array_equal(got, expected)
+    # One axis still below the crossover keeps the Fourier operator.
+    mixed = hessian_matrix(image, sigma=(0.5, 2.0), mode='reflect', method='dct')
+    for got, expected in zip(mixed, _dct_hessian(image, (0.5, 2.0))):
+        assert_allclose(got, expected, atol=1e-12, rtol=0)
+
+
+def test_dct_hessian_requires_reflect():
+    image = np.zeros((8, 8))
+    with pytest.raises(ValueError, match='reflect'):
+        hessian_matrix(image, sigma=0.5, mode='nearest', method='dct')
+
+
+def test_dct_crossover_does_not_step_between_0_6_and_1():
+    """A step of 0.02 that crosses 0.8 is no larger than the kernel's own."""
+    image = data.camera()[::2, ::2]
+    sigmas = np.round(np.arange(0.60, 1.001, 0.02), 2)
+    dct = {
+        sigma: hessian_matrix(image, sigma=float(sigma), mode='reflect', method='dct')
+        for sigma in sigmas
+    }
+    kernels = {
+        sigma: hessian_matrix(
+            image,
+            sigma=float(sigma),
+            mode='reflect',
+            method='gaussian-derivative',
+        )
+        for sigma in sigmas
+    }
+    for low, high in zip(sigmas[:-1], sigmas[1:]):
+        crossed = _rel_peak(dct[low], dct[high])
+        stayed = _rel_peak(kernels[low], kernels[high])
+        assert crossed <= stayed * 1.001
+
+
+def test_dct_crossover_threshold_is_where_the_kernel_catches_up():
+    """0.8 is where the bulk of a photograph agrees, while the peak remains."""
+    image = img_as_float(data.camera()[::2, ::2])
+    inner = (slice(16, -16), slice(16, -16))
+
+    def gap(sigma):
+        kernels = hessian_matrix(
+            image, sigma=sigma, mode='reflect', method='gaussian-derivative'
+        )
+        fourier = _dct_hessian(image, sigma)
+        scale = max(np.max(np.abs(element[inner])) for element in fourier)
+        diff = np.stack([np.abs(a[inner] - b[inner]) for a, b in zip(kernels, fourier)])
+        rel = diff / scale
+        return rel.max(), np.median(rel), np.quantile(rel, 0.95)
+
+    low_max, low_med, _low_p95 = gap(0.5)
+    at_max, at_med, at_p95 = gap(0.8)
+    high_max, high_med, _high_p95 = gap(1.0)
+    assert low_max > 0.1
+    # The median and the 95th percentile have fallen. The single largest
+    # pixel is the Nyquist spike, and it is still visible at 0.8.
+    assert at_med < 2e-3
+    assert at_p95 < 0.02
+    assert at_med < low_med / 2
+    assert at_max > 0.05
+    assert high_med < at_med
+    assert high_max < at_max
+
+
+def test_dct_hessian_differs_from_finite_differences_at_small_sigma():
+    image = np.random.default_rng(3).random((24, 24))
+    dct = hessian_matrix(image, sigma=0.5, mode='reflect', method='dct')
+    finite = hessian_matrix(
+        image, sigma=0.5, mode='reflect', method='finite-difference'
+    )
+    assert _rel_peak(finite, dct) > 1e-3
+
+
+def test_dct_hessian_3d():
+    image = np.random.default_rng(4).random((8, 8, 8))
+    got = hessian_matrix(image, sigma=0.5, mode='reflect', method='dct')
+    for element, expected in zip(got, _dct_hessian(image, 0.5)):
+        assert_allclose(element, expected, atol=1e-12, rtol=0)
+    at_crossover = hessian_matrix(image, sigma=1.0, mode='reflect', method='dct')
+    kernels = hessian_matrix(
+        image, sigma=1.0, mode='reflect', method='gaussian-derivative'
+    )
+    for element, expected in zip(at_crossover, kernels):
+        assert_array_equal(element, expected)
 
 
 @pytest.mark.parametrize('dtype', [np.float16, np.float32, np.float64])
