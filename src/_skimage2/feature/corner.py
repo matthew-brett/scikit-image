@@ -5,7 +5,7 @@ from scipy import ndimage as ndi
 from scipy import spatial, stats
 
 from ..filters._gaussian import gaussian
-from _skimage2._shared.utils import _supported_float_type, safe_as_int, warn
+from _skimage2._shared.utils import _supported_float_type, safe_as_int
 from ..transform.integral import integral_image
 from ..util import img_as_float
 from ._hessian_det_appx import _hessian_matrix_det
@@ -160,20 +160,15 @@ def _gaussian_derivative_kernel(sigma, order, truncate=8):
     return kernel
 
 
-def _hessian_matrix_with_gaussian(image, sigma=1, mode='reflect', cval=0, order='rc'):
+def _hessian_matrix_with_gaussian(image, sigma=1, mode='reflect', cval=0):
     """Hessian elements from one separable pass of moment-corrected kernels.
 
-    ``order='xy'`` reverses the element list. Each element is computed in one
-    frame, so the reversal is a relabelling and not a second differentiation.
+    The list is in ``rc`` order. Each element is computed in one frame, so the
+    ``xy`` labelling is this list reversed.
     """
     image = img_as_float(image)
     float_dtype = _supported_float_type(image.dtype)
     image = image.astype(float_dtype, copy=False)
-    if image.ndim > 2 and order == 'xy':
-        raise ValueError("order='xy' is only supported for 2D images.")
-    if order not in ('rc', 'xy'):
-        raise ValueError(f'unrecognized order: {order}')
-
     ndim = image.ndim
     # A constant continued by the same constant has no curvature. Returning
     # that as an exact zero keeps a later division by the peak from turning a
@@ -211,11 +206,24 @@ def _hessian_matrix_with_gaussian(image, sigma=1, mode='reflect', cval=0, order=
                 cval=cval,
             )
         H_elems.append(element)
-    return H_elems[::-1] if order == 'xy' else H_elems
+    return H_elems
+
+
+def _hessian_matrix_finite_difference(image, sigma=1, mode='constant', cval=0):
+    """Hessian elements by finite differences of a Gaussian-smoothed image.
+
+    ``image`` is already floating point. The list is in ``rc`` order.
+    """
+    smoothed = gaussian(image, sigma=sigma, mode=mode, cval=cval)
+    gradients = np.gradient(smoothed)
+    return [
+        np.gradient(gradients[ax0], axis=ax1)
+        for ax0, ax1 in combinations_with_replacement(range(image.ndim), 2)
+    ]
 
 
 def hessian_matrix(
-    image, sigma=1, mode='constant', cval=0, order='rc', use_gaussian_derivatives=None
+    image, sigma=1, mode='constant', cval=0, method='gaussian-derivative'
 ):
     r"""Compute the Hessian matrix.
 
@@ -233,23 +241,21 @@ def hessian_matrix(
     ----------
     image : ndarray
         Input image.
-    sigma : float
-        Standard deviation used for the Gaussian kernel, which is used as
-        weighting function for the auto-correlation matrix.
+    sigma : float or sequence of float, optional
+        Standard deviation used for the Gaussian kernel, which sets the amount
+        of smoothing in terms of pixel-distances. A sequence gives one value
+        per axis.
     mode : {'constant', 'reflect', 'wrap', 'nearest', 'mirror'}, optional
         How to handle values outside the image borders.
     cval : float, optional
         Used in conjunction with mode 'constant', the value outside
         the image boundaries.
-    order : {'rc', 'xy'}, optional
-        For 2D images, this parameter allows for the use of reverse or forward
-        order of the image axes in gradient computation. 'rc' indicates the use
-        of the first axis initially (Hrr, Hrc, Hcc), whilst 'xy' indicates the
-        usage of the last axis initially (Hxx, Hxy, Hyy). Images with higher
-        dimension must always use 'rc' order.
-    use_gaussian_derivatives : bool, optional
-        Indicates whether the Hessian is computed by convolving with Gaussian
-        derivatives, or by a simple finite-difference operation.
+    method : {'gaussian-derivative', 'finite-difference'}, optional
+        ``'gaussian-derivative'`` convolves once per element with a
+        moment-corrected sampled Gaussian derivative. ``'finite-difference'``
+        smooths the image, then takes finite differences. The element list is
+        in ``rc`` order either way; the old ``order='xy'`` list is this list
+        reversed.
 
     Returns
     -------
@@ -257,7 +263,6 @@ def hessian_matrix(
         Upper-diagonal elements of the hessian matrix for each pixel in the
         input image. In 2D, this will be a three element list containing [Hrr,
         Hrc, Hcc]. In nD, the list will contain ``(n**2 + n) / 2`` arrays.
-
 
     Notes
     -----
@@ -270,71 +275,42 @@ def hessian_matrix(
         \frac{\partial }{\partial x_i}(I * G) =
         I * \left( \frac{\partial }{\partial x_i} G \right)
 
-    When ``use_gaussian_derivatives`` is ``True``, each element is one separable
-    convolution with a sampled Gaussian derivative whose discrete moments have
-    been restored, so every axis is extended over the border exactly once.
+    With ``method='gaussian-derivative'``, each element is one separable
+    convolution, so every axis is extended over the border exactly once.
+    With ``method='finite-difference'``, the derivatives are finite
+    differences of the smoothed image.
 
-    When ``use_gaussian_derivatives`` is ``False``, simple finite differences
-    on a Gaussian-smoothed image are used instead.
-
-    .. versionchanged:: 0.27
-        With ``use_gaussian_derivatives=True``, each element is computed in one
-        pass. The previous scheme differentiated twice, so the border rule was
-        applied twice and, below ``sigma`` of about 1, most of the curvature
-        was lost. ``order='xy'`` is the reversed element list.
+    .. versionchanged:: 2.0
+        ``use_gaussian_derivatives`` is ``method``, and ``'gaussian-derivative'``
+        is the default. ``order`` is gone; ``order='xy'`` is the reversed list.
+        See :func:`skimage.feature.hessian_matrix` for the migration note.
 
     Examples
     --------
     >>> from _skimage2.feature import hessian_matrix
     >>> square = np.zeros((5, 5))
     >>> square[2, 2] = 4
-    >>> Hrr, Hrc, Hcc = hessian_matrix(square, sigma=0.1, order='rc',
-    ...                                use_gaussian_derivatives=False)
+    >>> Hrr, Hrc, Hcc = hessian_matrix(square, sigma=0.1)
     >>> Hrc
     array([[ 0.,  0.,  0.,  0.,  0.],
            [ 0.,  1.,  0., -1.,  0.],
            [ 0.,  0.,  0.,  0.,  0.],
-           [ 0., -1.,  0.,  1.,  0.],
+           [ 0., -1., -0.,  1.,  0.],
            [ 0.,  0.,  0.,  0.,  0.]])
 
     """
-
     image = img_as_float(image)
     float_dtype = _supported_float_type(image.dtype)
     image = image.astype(float_dtype, copy=False)
-    if image.ndim > 2 and order == "xy":
-        raise ValueError("order='xy' is only supported for 2D images.")
-    if order not in ["rc", "xy"]:
-        raise ValueError(f"unrecognized order: {order}")
-
-    if use_gaussian_derivatives is None:
-        use_gaussian_derivatives = False
-        warn(
-            "use_gaussian_derivatives currently defaults to False, but will "
-            "change to True in a future version. Please specify this "
-            "argument explicitly to maintain the current behavior",
-            category=FutureWarning,
-            stacklevel=2,
+    if method == 'gaussian-derivative':
+        return _hessian_matrix_with_gaussian(image, sigma=sigma, mode=mode, cval=cval)
+    if method == 'finite-difference':
+        return _hessian_matrix_finite_difference(
+            image, sigma=sigma, mode=mode, cval=cval
         )
-
-    if use_gaussian_derivatives:
-        return _hessian_matrix_with_gaussian(
-            image, sigma=sigma, mode=mode, cval=cval, order=order
-        )
-
-    gaussian_filtered = gaussian(image, sigma=sigma, mode=mode, cval=cval)
-
-    gradients = np.gradient(gaussian_filtered)
-    axes = range(image.ndim)
-
-    if order == 'xy':
-        axes = reversed(axes)
-
-    H_elems = [
-        np.gradient(gradients[ax0], axis=ax1)
-        for ax0, ax1 in combinations_with_replacement(axes, 2)
-    ]
-    return H_elems
+    raise ValueError(
+        f"method must be 'gaussian-derivative' or 'finite-difference'; got {method!r}"
+    )
 
 
 def hessian_matrix_det(image, sigma=1, approximate=True):
@@ -351,13 +327,20 @@ def hessian_matrix_det(image, sigma=1, approximate=True):
         Standard deviation of the Gaussian kernel used for the Hessian
         matrix.
     approximate : bool, optional
-        If ``True`` and the image is 2D, use a much faster approximate
-        computation. This argument has no effect on 3D and higher images.
+        If ``True``, use box filters over an integral image. This is defined
+        for a 2-D image only; a 3-D image, or any other rank, raises
+        ``ValueError``. If ``False``, return the determinant of
+        ``hessian_matrix``, which uses ``method='gaussian-derivative'``.
 
     Returns
     -------
     out : array
         The array of the Determinant of Hessians.
+
+    Raises
+    ------
+    ValueError
+        If ``approximate`` is ``True`` and ``image`` is not two-dimensional.
 
     References
     ----------
@@ -372,18 +355,26 @@ def hessian_matrix_det(image, sigma=1, approximate=True):
     would expect. The downside is that the result for `sigma` less than `3`
     is not accurate, i.e., not similar to the result obtained if someone
     computed the Hessian and took its determinant.
+
+    .. versionchanged:: 2.0
+        ``approximate=True`` raises on any image that is not 2-D, where it
+        used to be ignored. The exact determinant uses the Gaussian-derivative
+        Hessian. See :func:`skimage.feature.hessian_matrix_det`.
     """
     image = img_as_float(image)
     float_dtype = _supported_float_type(image.dtype)
     image = image.astype(float_dtype, copy=False)
-    if image.ndim == 2 and approximate:
+    if approximate and image.ndim != 2:
+        raise ValueError(
+            'hessian_matrix_det with approximate=True needs a 2D image; '
+            f'got {image.ndim} dimensions. Pass approximate=False for the '
+            'determinant of the Gaussian-derivative Hessian.'
+        )
+    if approximate:
         integral = integral_image(image)
         return np.array(_hessian_matrix_det(integral, sigma))
-    else:  # slower brute-force implementation for nD images
-        hessian_mat_array = _symmetric_image(
-            hessian_matrix(image, sigma, use_gaussian_derivatives=False)
-        )
-        return np.linalg.det(hessian_mat_array)
+    hessian_mat_array = _symmetric_image(hessian_matrix(image, sigma))
+    return np.linalg.det(hessian_mat_array)
 
 
 def _symmetric_compute_eigenvalues(S_elems):
@@ -506,14 +497,13 @@ def hessian_matrix_eigvals(H_elems):
     >>> from _skimage2.feature import hessian_matrix, hessian_matrix_eigvals
     >>> square = np.zeros((5, 5))
     >>> square[2, 2] = 4
-    >>> H_elems = hessian_matrix(square, sigma=0.1, order='rc',
-    ...                          use_gaussian_derivatives=False)
+    >>> H_elems = hessian_matrix(square, sigma=0.1)
     >>> hessian_matrix_eigvals(H_elems)[0]
-    array([[ 0.,  0.,  2.,  0.,  0.],
-           [ 0.,  1.,  0.,  1.,  0.],
-           [ 2.,  0., -2.,  0.,  2.],
-           [ 0.,  1.,  0.,  1.,  0.],
-           [ 0.,  0.,  2.,  0.,  0.]])
+    array([[ 0.,  0.,  0.,  0.,  0.],
+           [ 0.,  1.,  4.,  1.,  0.],
+           [ 0.,  4., -8.,  4.,  0.],
+           [ 0.,  1.,  4.,  1.,  0.],
+           [ 0.,  0.,  0.,  0.,  0.]])
     """
     return _symmetric_compute_eigenvalues(H_elems)
 
@@ -584,13 +574,10 @@ def shape_index(image, sigma=1, mode='constant', cval=0):
            [ nan,  nan, -0.5,  nan,  nan]])
     """
 
+    # Finite differences, for now: the Gaussian-derivative Hessian moves the
+    # shape index, and the move is large below sigma of about 1.
     H = hessian_matrix(
-        image,
-        sigma=sigma,
-        mode=mode,
-        cval=cval,
-        order='rc',
-        use_gaussian_derivatives=False,
+        image, sigma=sigma, mode=mode, cval=cval, method='finite-difference'
     )
     l1, l2 = hessian_matrix_eigvals(H)
 

@@ -83,9 +83,7 @@ def meijering(
     filtered_max = np.zeros_like(image)
     for sigma in sigmas:  # Filter for all sigmas.
         eigvals = hessian_matrix_eigvals(
-            hessian_matrix(
-                image, sigma, mode=mode, cval=cval, use_gaussian_derivatives=True
-            )
+            hessian_matrix(image, sigma, mode=mode, cval=cval)
         )
         # Compute normalized eigenvalues l_i = e_i + sum_{j!=i} alpha * e_j.
         vals = np.tensordot(mtx, eigvals, 1)
@@ -161,9 +159,7 @@ def sato(image, sigmas=range(1, 10, 2), black_ridges=True, mode='reflect', cval=
     filtered_max = np.zeros_like(image)
     for sigma in sigmas:  # Filter for all sigmas.
         eigvals = hessian_matrix_eigvals(
-            hessian_matrix(
-                image, sigma, mode=mode, cval=cval, use_gaussian_derivatives=True
-            )
+            hessian_matrix(image, sigma, mode=mode, cval=cval)
         )
         # Compute normalized tubeness (eqs. (9) and (22), ref. [1]_) as the
         # geometric mean of eigvals other than the lowest one
@@ -285,9 +281,7 @@ def frangi(
     filtered_max = np.zeros_like(image)
     for sigma in sigmas:  # Filter for all sigmas.
         eigvals = hessian_matrix_eigvals(
-            hessian_matrix(
-                image, sigma, mode=mode, cval=cval, use_gaussian_derivatives=True
-            )
+            hessian_matrix(image, sigma, mode=mode, cval=cval)
         )
         # Sort eigenvalues by magnitude.
         eigvals = np.take_along_axis(eigvals, abs(eigvals).argsort(0), 0)

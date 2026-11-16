@@ -169,9 +169,7 @@ def test_structure_tensor_sigma(ndim):
 def test_hessian_matrix(dtype):
     square = np.zeros((5, 5), dtype=dtype)
     square[2, 2] = 4
-    Hrr, Hrc, Hcc = hessian_matrix(
-        square, sigma=0.1, order='rc', use_gaussian_derivatives=False
-    )
+    Hrr, Hrc, Hcc = hessian_matrix(square, sigma=0.1, method='finite-difference')
 
     out_dtype = _supported_float_type(dtype)
     assert all(a.dtype == out_dtype for a in (Hrr, Hrc, Hcc))
@@ -214,37 +212,14 @@ def test_hessian_matrix(dtype):
         ),
     )
 
-    with pytest.warns(
-        FutureWarning, match="use_gaussian_derivatives currently defaults"
-    ):
-        # FutureWarning warning when use_gaussian_derivatives is not
-        # specified.
-        hessian_matrix(square, sigma=0.1, order='rc')
-
-
-@pytest.mark.parametrize('use_gaussian_derivatives', [False, True])
-def test_hessian_matrix_order(use_gaussian_derivatives):
-    square = np.zeros((5, 5), dtype=float)
-    square[2, 2] = 4
-
-    Hxx, Hxy, Hyy = hessian_matrix(
-        square, sigma=0.1, order="xy", use_gaussian_derivatives=use_gaussian_derivatives
-    )
-
-    Hrr, Hrc, Hcc = hessian_matrix(
-        square, sigma=0.1, order="rc", use_gaussian_derivatives=use_gaussian_derivatives
-    )
-
-    # verify results are equivalent, just reversed in order
-    assert_array_equal(Hxx, Hcc)
-    assert_array_equal(Hxy, Hrc)
-    assert_array_equal(Hyy, Hrr)
+    with pytest.raises(ValueError, match='method'):
+        hessian_matrix(square, sigma=0.1, method='nope')
 
 
 def test_hessian_matrix_3d():
     cube = np.zeros((5, 5, 5))
     cube[2, 2, 2] = 4
-    Hs = hessian_matrix(cube, sigma=0.1, order='rc', use_gaussian_derivatives=False)
+    Hs = hessian_matrix(cube, sigma=0.1, method='finite-difference')
     assert len(Hs) == 6, f"incorrect number of Hessian images ({len(Hs)}) for 3D"
     # This test didn't catch the fix in gh-6624 (passes with and without) ...
     assert_almost_equal(
@@ -274,26 +249,11 @@ def test_hessian_matrix_3d():
     )
 
 
-@pytest.mark.parametrize('use_gaussian_derivatives', [False, True])
-def test_hessian_matrix_3d_xy(use_gaussian_derivatives):
-    img = np.ones((5, 5, 5))
+def test_hessian_matrix_has_no_order_parameter():
+    """``order`` lives on ``skimage.feature.hessian_matrix`` only."""
+    import inspect
 
-    # order="xy" is only permitted for 2D
-    with pytest.raises(ValueError):
-        hessian_matrix(
-            img,
-            sigma=0.1,
-            order="xy",
-            use_gaussian_derivatives=use_gaussian_derivatives,
-        )
-
-    with pytest.raises(ValueError):
-        hessian_matrix(
-            img,
-            sigma=0.1,
-            order='nonexistant',
-            use_gaussian_derivatives=use_gaussian_derivatives,
-        )
+    assert 'order' not in inspect.signature(hessian_matrix).parameters
 
 
 # ``np.pad`` spells two of the five boundary rules differently from
@@ -331,7 +291,7 @@ def test_hessian_gaussian_applies_the_boundary_rule_once(mode):
     """One pass extends each axis once, so padding first does not change it."""
     image = np.random.default_rng(0).random((48, 48))
     pad = 24
-    kwargs = dict(sigma=2, mode=mode, use_gaussian_derivatives=True)
+    kwargs = dict(sigma=2, mode=mode, method='gaussian-derivative')
     direct = hessian_matrix(image, **kwargs)
     bigger = np.pad(image, pad, mode=_NUMPY_PAD_MODE[mode])
     padded = hessian_matrix(bigger, **kwargs)
@@ -348,7 +308,7 @@ def test_hessian_gaussian_is_exact_on_a_quadratic(sigma, ndim, size):
     inner = _interior(ndim, sigma)
     tol = 1e-12 * max(np.abs(image).max(), 1)
     for got, expected in zip(
-        hessian_matrix(image, sigma=sigma, use_gaussian_derivatives=True), curvatures
+        hessian_matrix(image, sigma=sigma, method='gaussian-derivative'), curvatures
     ):
         assert_allclose(got[inner], expected, atol=tol, rtol=0)
 
@@ -360,7 +320,7 @@ def test_hessian_gaussian_has_no_response_to_a_constant(sigma):
     flat = np.full((48, 48), 0.4)
     inner = _interior(2, sigma)
     for element in hessian_matrix(
-        flat, sigma=sigma, mode='constant', cval=0, use_gaussian_derivatives=True
+        flat, sigma=sigma, mode='constant', cval=0, method='gaussian-derivative'
     ):
         assert_allclose(element[inner], 0, atol=1e-12)
 
@@ -380,19 +340,21 @@ def test_hessian_gaussian_matches_a_gaussian_blob(sigma):
     inner = _interior(2, sigma)
     tol = 1e-5 * max(np.abs(t).max() for t in truth)
     for got, expected in zip(
-        hessian_matrix(blob, sigma=sigma, use_gaussian_derivatives=True), truth
+        hessian_matrix(blob, sigma=sigma, method='gaussian-derivative'), truth
     ):
         assert_allclose(got[inner], expected[inner], atol=tol, rtol=0)
 
 
 @pytest.mark.parametrize('sigma', [0.5, 1, 2])
 def test_hessian_gaussian_order_is_a_reversal(sigma):
-    """``order='xy'`` is the reversed ``rc`` list, including at the border."""
+    """A Hessian is a tensor, so relabelling the axes relabels the elements."""
     image = np.random.default_rng(0).random((48, 48))
-    rc = hessian_matrix(image, sigma=sigma, use_gaussian_derivatives=True, order='rc')
-    xy = hessian_matrix(image, sigma=sigma, use_gaussian_derivatives=True, order='xy')
-    for got, expected in zip(xy, rc[::-1]):
-        assert_array_equal(got, expected)
+    rc = hessian_matrix(image, sigma=sigma, method='gaussian-derivative')
+    transposed = hessian_matrix(image.T, sigma=sigma, method='gaussian-derivative')
+    Hrr, Hrc, Hcc = rc
+    tol = 1e-12 * max(np.abs(h).max() for h in rc)
+    for got, expected in zip(transposed, (Hcc.T, Hrc.T, Hrr.T)):
+        assert_allclose(got, expected, atol=tol, rtol=0)
 
 
 @pytest.mark.parametrize('dtype', [np.float16, np.float32, np.float64])
@@ -446,7 +408,7 @@ def test_structure_tensor_eigenvalues_3d():
 def test_hessian_matrix_eigvals(dtype):
     square = np.zeros((5, 5), dtype=dtype)
     square[2, 2] = 4
-    H = hessian_matrix(square, sigma=0.1, order='rc', use_gaussian_derivatives=False)
+    H = hessian_matrix(square, sigma=0.1, method='finite-difference')
     l1, l2 = hessian_matrix_eigvals(H)
     out_dtype = _supported_float_type(dtype)
     assert all(a.dtype == out_dtype for a in (l1, l2))
@@ -479,7 +441,7 @@ def test_hessian_matrix_eigvals(dtype):
 @pytest.mark.parametrize('dtype', [np.float16, np.float32, np.float64])
 def test_hessian_matrix_eigvals_3d(im3d, dtype):
     im3d = im3d.astype(dtype, copy=False)
-    H = hessian_matrix(im3d, use_gaussian_derivatives=False)
+    H = hessian_matrix(im3d, method='finite-difference')
     E = hessian_matrix_eigvals(H)
     out_dtype = _supported_float_type(dtype)
     assert all(a.dtype == out_dtype for a in E)
@@ -514,7 +476,9 @@ def test_hessian_matrix_det():
 @pytest.mark.parametrize('dtype', [np.float16, np.float32, np.float64])
 def test_hessian_matrix_det_3d(im3d, dtype):
     im3d = im3d.astype(dtype, copy=False)
-    D = hessian_matrix_det(im3d)
+    with pytest.raises(ValueError, match='2D'):
+        hessian_matrix_det(im3d, approximate=True)
+    D = hessian_matrix_det(im3d, approximate=False)
     assert D.dtype == _supported_float_type(dtype)
     D0 = D[D.shape[0] // 2]
     row_center, col_center = np.array(D0.shape) // 2
