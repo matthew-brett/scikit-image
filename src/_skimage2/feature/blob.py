@@ -14,7 +14,7 @@ from _skimage2._shared.utils import (
     deprecate_parameter,
 )
 from ..transform.integral import integral_image
-from ._hessian_det_appx import _hessian_matrix_det
+from ._hessian_det_appx import _hessian_matrix_det, _surf_lobe
 from ._peaks import peak_local_max
 
 # This basic blob detection algorithm is based on:
@@ -755,8 +755,8 @@ def blob_doh(
     A : ndarray of shape (n, 3)
         A 2d array with each row representing 3 values, ``(y,x,sigma)``
         where ``(y,x)`` are coordinates of the blob and ``sigma`` is the
-        standard deviation of the Gaussian kernel of the Hessian Matrix whose
-        determinant detected the blob.
+        lobe of the box filters whose determinant detected the blob. The lobe
+        is an odd integer; see Notes.
 
     References
     ----------
@@ -770,33 +770,43 @@ def blob_doh(
     >>> from _skimage2 import data, feature
     >>> img = data.coins()
     >>> feature.blob_doh(img)
-    array([[197.        , 153.        ,  20.33333333],
-           [124.        , 336.        ,  20.33333333],
-           [126.        , 153.        ,  20.33333333],
-           [195.        , 100.        ,  23.55555556],
-           [192.        , 212.        ,  23.55555556],
-           [121.        , 271.        ,  30.        ],
-           [126.        , 101.        ,  20.33333333],
-           [193.        , 275.        ,  23.55555556],
-           [123.        , 205.        ,  20.33333333],
-           [270.        , 363.        ,  30.        ],
-           [265.        , 113.        ,  23.55555556],
-           [262.        , 243.        ,  23.55555556],
-           [185.        , 348.        ,  30.        ],
-           [156.        , 302.        ,  30.        ],
-           [123.        ,  44.        ,  23.55555556],
-           [260.        , 173.        ,  30.        ],
-           [197.        ,  44.        ,  20.33333333]])
+    array([[198., 155.,  21.],
+           [125., 337.,  21.],
+           [126., 154.,  21.],
+           [197., 101.,  23.],
+           [196., 213.,  27.],
+           [127., 101.,  21.],
+           [122., 272.,  27.],
+           [194., 276.,  23.],
+           [125., 206.,  21.],
+           [266., 114.,  21.],
+           [263., 244.,  23.],
+           [270., 363.,  27.],
+           [124.,  45.,  21.],
+           [186., 348.,  31.],
+           [157., 303.,  31.],
+           [260., 174.,  27.],
+           [265., 302.,  27.],
+           [198.,  44.,  21.]])
 
     Notes
     -----
     The radius of each blob is approximately `sigma`.
+
+    Each `sigma` in the range selects a box filter whose lobe is the odd
+    integer nearest to `sigma`, as for :func:`hessian_matrix_det`. Several
+    `sigma` can select the same lobe; the method computes each lobe once, and
+    reports the lobe as the `sigma` of the blob. The scales that can be
+    reported are therefore 1, 3, 5, 7, and so on. The box filters of lobe
+    ``L`` match the determinant of a Gaussian Hessian of standard deviation
+    about ``0.55 L``, not ``L``.
+
     Computation of Determinant of Hessians is independent of the standard
     deviation. Therefore detecting larger blobs won't take more time. In
     methods line :py:meth:`blob_dog` and :py:meth:`blob_log` the computation
     of Gaussians for larger `sigma` takes more time. The downside is that
-    this method can't be used for detecting blobs of radius less than `3px`
-    due to the box filters used in the approximation of Hessian Determinant.
+    the scale steps are coarse, and the box filters approximate the
+    Gaussian derivatives poorly for small lobes.
     """
     if threshold_rel is DEPRECATED:
         threshold_rel = None
@@ -815,9 +825,13 @@ def blob_doh(
     else:
         sigma_list = np.linspace(min_sigma, max_sigma, num_sigma)
 
-    image_cube = np.empty(shape=image.shape + (len(sigma_list),), dtype=float_dtype)
-    for j, s in enumerate(sigma_list):
-        image_cube[..., j] = _hessian_matrix_det(image, s)
+    # The box filters change only in steps of the odd lobe, so several sigma
+    # can give the same plane. Identical neighbouring planes would make false
+    # maxima across scale; use one plane per lobe.
+    lobes = np.unique([_surf_lobe(s) for s in sigma_list])
+    image_cube = np.empty(shape=image.shape + (len(lobes),), dtype=float_dtype)
+    for j, lobe in enumerate(lobes):
+        image_cube[..., j] = _hessian_matrix_det(image, lobe)
 
     local_maxima = peak_local_max(
         image_cube,
@@ -833,5 +847,5 @@ def blob_doh(
     # Convert local_maxima to float64
     lm = local_maxima.astype(np.float64)
     # Convert the last index to its corresponding scale value
-    lm[:, -1] = sigma_list[local_maxima[:, -1]]
+    lm[:, -1] = lobes[local_maxima[:, -1]]
     return _prune_blobs(lm, overlap)

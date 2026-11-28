@@ -371,7 +371,9 @@ def hessian_matrix_det(image, sigma=1, approximate=True):
         The image over which to compute the Hessian Determinant.
     sigma : float, optional
         Standard deviation of the Gaussian kernel used for the Hessian
-        matrix.
+        matrix. With ``approximate=True``, `sigma` sets the lobe ``L`` of
+        the box filters instead: the odd integer nearest to `sigma`, with
+        values halfway between, such as 2 or 4, rounded up. See Notes.
     approximate : bool, optional
         If ``True`` and the image is 2D, use a much faster approximate
         computation. This argument has no effect on 3D and higher images.
@@ -391,9 +393,14 @@ def hessian_matrix_det(image, sigma=1, approximate=True):
     -----
     For 2D images when ``approximate=True``, the running time of this method
     only depends on size of the image. It is independent of `sigma` as one
-    would expect. The downside is that the result for `sigma` less than `3`
-    is not accurate, i.e., not similar to the result obtained if someone
-    computed the Hessian and took its determinant.
+    would expect.
+
+    The approximate method uses the box filters of SURF [1]_, ``3 L`` pixels
+    wide, normalised by ``1 / (3 L)**2``. They are centred on each pixel and
+    count pixels outside the image as zero. Their determinant is close in
+    shape to ``t**2 det H`` of a Gaussian Hessian ``H`` at scale ``t = s**2``
+    with ``s`` about ``0.55 L``, not ``s = sigma``. The match is poor for
+    lobe ``L = 1``, which `sigma` below 2 selects.
     """
     image = img_as_float(image)
     float_dtype = _supported_float_type(image.dtype)
