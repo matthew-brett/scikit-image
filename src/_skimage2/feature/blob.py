@@ -831,7 +831,7 @@ def blob_doh(
     lobes = np.unique([_surf_lobe(s) for s in sigma_list])
     image_cube = np.empty(shape=image.shape + (len(lobes),), dtype=float_dtype)
     for j, lobe in enumerate(lobes):
-        image_cube[..., j] = _hessian_matrix_det(image, lobe)
+        image_cube[..., j] = _hessian_matrix_det(image, int(lobe))
 
     local_maxima = peak_local_max(
         image_cube,

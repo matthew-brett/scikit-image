@@ -407,7 +407,7 @@ def hessian_matrix_det(image, sigma=1, approximate=True):
     image = image.astype(float_dtype, copy=False)
     if image.ndim == 2 and approximate:
         integral = integral_image(image)
-        return np.array(_hessian_matrix_det(integral, sigma))
+        return np.array(_hessian_matrix_det(integral, float(sigma)))
     else:  # slower brute-force implementation for nD images
         hessian_mat_array = _symmetric_image(
             hessian_matrix(image, sigma, use_gaussian_derivatives=False)
